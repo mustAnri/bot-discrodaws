@@ -1,0 +1,40 @@
+{
+  "handlers": {
+    "717214260479918252": {
+      "maxJob": 1,
+      "currentJob": 0,
+      "jobs": [],
+      "services": [
+        "PTHT"
+      ],
+      "totalDone": 9999
+    },
+    "785625997172408330": {
+      "maxJob": 1,
+      "currentJob": 0,
+      "jobs": [],
+      "services": [
+        "ptht"
+      ],
+      "totalDone": 9999
+    },
+    "972556907799781436": {
+      "maxJob": 2,
+      "currentJob": 0,
+      "jobs": [],
+      "services": [
+        "cbd/cwd/put barrier/clear floating"
+      ],
+      "totalDone": 23
+    },
+    "474106004943142913": {
+      "maxJob": 0,
+      "currentJob": 0,
+      "jobs": [],
+      "services": [],
+      "totalDone": 10
+    }
+  },
+  "rankingChannelId": "1472669808964276274",
+  "rankingMessageId": "1473025267848053051"
+}
