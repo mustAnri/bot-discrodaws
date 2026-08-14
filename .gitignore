@@ -10,6 +10,12 @@ node_modules/
 *.log
 npm-debug.log*
 
+# Data kadaluarsa (data aktif ada di Data/handlerData.json)
+/handlerData.json
+
+# Local tooling
+.claude/
+
 # OS files
 .DS_Store
 Thumbs.db
