@@ -1,14 +1,34 @@
-# Bot Barokah
+# Discord Handler Bot
 
-Discord bot untuk manajemen handler job (join, take job, done, status, ranking) menggunakan [discord.js](https://discord.js.org/) v14, dilengkapi **admin panel web** untuk mengatur role/channel ID dan kelola data handler.
+Discord bot untuk manajemen handler job (join, take job, done, status, ranking) menggunakan [discord.js](https://discord.js.org/) v14, dilengkapi **admin panel web** untuk mengatur role/channel ID dan kelola data handler tanpa edit kode.
 
-## Fitur Admin Panel
+## 🚀 One-Click Deploy ke Railway
 
-- ⚙️ Ubah Handler Role ID, Take/Done Log Channel, Ranking Channel — tanpa edit kode
+[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/new?template=https%3A%2F%2Fgithub.com%2FmustAnri%2Fbot-discrodaws)
+
+Klik tombol di atas, lalu isi **Variables** di Railway:
+
+| Variable | Keterangan |
+|----------|------------|
+| `TOKEN` | Token bot Discord |
+| `CLIENT_ID` | Application ID |
+| `GUILD_ID` | ID server Discord |
+| `DATA_DIR` | `/data` |
+| `ADMIN_PASSWORD` | Password admin panel (buat yang kuat!) |
+
+Setelah deploy selesai:
+1. Klik kanan service → **Add Volume** → mount path `/data` (agar data tidak hilang saat redeploy)
+2. **Settings → Networking → Generate Domain** (untuk akses admin panel)
+3. Buka domain tersebut → login pakai `ADMIN_PASSWORD`
+4. Deploy slash commands (sekali saja): `railway run node deploy-commands.js` atau jalankan lokal dengan `npm run deploy-commands`
+
+## ✨ Fitur Admin Panel
+
+- ⚙️ Ubah Handler Role ID, Take/Done Log Channel, Ranking Channel — langsung dari browser
 - 👥 Lihat, edit, reset job, dan hapus data handler
 - 🔒 Login dengan password (`ADMIN_PASSWORD`), session 24 jam, rate-limit login
 
-## Menjalankan Lokal
+## 🛠️ Menjalankan Lokal
 
 ```bash
 # 1. Install dependencies
@@ -19,6 +39,7 @@ copy .env.example .env   # Windows
 # cp .env.example .env   # Linux/Mac
 
 # 3. Isi TOKEN, CLIENT_ID, GUILD_ID, ADMIN_PASSWORD di .env
+#    Untuk lokal, kosongkan DATA_DIR agar data tersimpan di folder Data/
 
 # 4. Deploy slash commands ke server (sekali saja / saat commands berubah)
 npm run deploy-commands
@@ -27,46 +48,27 @@ npm run deploy-commands
 npm start
 ```
 
-> Untuk lokal, kosongkan `DATA_DIR` di `.env` agar data disimpan di folder `Data/`.
-> Admin panel bisa diakses di `http://localhost:3000` (login pakai `ADMIN_PASSWORD`).
+## 📋 Daftar Command Discord
 
-## Deploy ke Railway
+| Command | Fungsi |
+|---------|--------|
+| `/join` | Daftar sebagai handler (isi max job & jenis layanan) |
+| `/take` | Ambil job dari customer |
+| `/done` | Tandai job selesai + upload bukti |
+| `/leave` | Keluar / tidak ready |
+| `/status` | Cek status handler |
+| `/ranking` | Lihat leaderboard handler |
+| `/menu` | Tampilkan menu bot |
 
-### Persiapan
-1. Reset token bot di [Discord Developer Portal](https://discord.com/developers/applications) → aplikasi kamu → **Bot** → **Reset Token** (wajib jika token pernah bocor).
-2. Push kode ini ke GitHub (file `.env` sudah di-ignore oleh `.gitignore`).
-
-### Langkah Deploy
-1. Buka [railway.com](https://railway.com) → **New Project** → **Deploy from GitHub repo**.
-2. Tambahkan **Variables** di service bot:
-
-   | Variable | Nilai |
-   |----------|-------|
-   | `TOKEN` | Token bot Discord |
-   | `CLIENT_ID` | Application ID |
-   | `GUILD_ID` | ID server Discord |
-   | `DATA_DIR` | `/data` |
-   | `ADMIN_PASSWORD` | Password admin panel (buat yang kuat!) |
-
-3. Tambahkan **Volume**: klik kanan service → **Add Volume** → mount path `/data`.
-   - Volume ini menyimpan `handlerData.json` dan `config.json` agar data tidak hilang saat redeploy.
-4. Deploy. Cek log sampai muncul: `🔑 Bot berhasil login.` dan `🌐 Admin panel berjalan di port ...`
-5. **Generate Domain**: Settings service → Networking → **Generate Domain**.
-   - Admin panel diakses lewat domain tersebut.
-   - ⚠️ Karena admin panel pakai password, **jangan bagikan domain-nya**. Pertimbangkan ubah password (`ADMIN_PASSWORD`) secara berkala.
-6. Deploy slash commands (sekali saja). Pilih salah satu:
-   - **Lokal**: `npm run deploy-commands` (pakai `.env` lokal)
-   - **Railway**: jalankan dari Railway CLI:
-     ```bash
-     railway run node deploy-commands.js
-     ```
-
-### Catatan Penting
-- Berbeda dengan bot murni, project ini **membutuhkan domain/public networking** untuk admin panel.
-- Data pertama kali deploy akan otomatis disalin dari `Data/handlerData.json` ke volume (jika volume kosong).
-
-## Menghapus Semua Command
+## 🗑️ Menghapus Semua Command
 
 ```bash
 npm run delete-commands
 ```
+
+## 📌 Catatan Deploy
+
+- Data handler & config disimpan di file JSON. Di Railway, set `DATA_DIR=/data` + pasang volume di path `/data` agar data **tidak hilang saat redeploy**.
+- Deploy pertama kali: data bawaan otomatis disalin ke volume.
+- Domain Railway bersifat **publik** — jangan bagikan `ADMIN_PASSWORD` sembarangan.
+- Jika token bot pernah bocor, segera **Reset Token** di [Discord Developer Portal](https://discord.com/developers/applications) → aplikasi → **Bot** → **Reset Token**.
