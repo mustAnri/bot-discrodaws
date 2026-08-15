@@ -91,6 +91,6 @@ if (!process.env.TOKEN) {
 client.login(process.env.TOKEN)
     .then(() => {
         console.log("🔑 Bot berhasil login.");
-        startAdminServer();
+        startAdminServer(client);
     })
     .catch(err => console.error("❌ Gagal login bot:", err));

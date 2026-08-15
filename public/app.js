@@ -19,6 +19,10 @@
         settingsStatus: document.getElementById("settings-status"),
         handlersList: document.getElementById("handlers-list"),
         handlersReload: document.getElementById("handlers-reload"),
+        backupBtn: document.getElementById("backup-btn"),
+        restoreFile: document.getElementById("restore-file"),
+        syncBtn: document.getElementById("sync-btn"),
+        toolsStatus: document.getElementById("tools-status"),
         editModal: document.getElementById("edit-modal"),
         editForm: document.getElementById("edit-form"),
         editUserId: document.getElementById("edit-user-id"),
@@ -235,6 +239,73 @@
     });
 
     el.handlersReload.addEventListener("click", loadHandlers);
+
+    // ================= BACKUP / RESTORE / SYNC =================
+    function setToolsStatus(message, type = "") {
+        el.toolsStatus.textContent = message;
+        el.toolsStatus.className = `status-msg ${type}`;
+    }
+
+    // Download backup sebagai file JSON
+    el.backupBtn.addEventListener("click", async () => {
+        try {
+            const res = await fetch("/api/backup");
+            if (res.status === 401) return showView("login");
+            if (!res.ok) throw new Error("Gagal membuat backup.");
+
+            const data = await res.json();
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `backup-${new Date().toISOString().slice(0, 10)}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+            setToolsStatus("✅ Backup berhasil didownload.", "ok");
+        } catch (err) {
+            setToolsStatus(`❌ ${err.message}`, "err");
+        }
+    });
+
+    // Restore dari file backup
+    el.restoreFile.addEventListener("change", async (e) => {
+        const file = e.target.files[0];
+        e.target.value = ""; // reset agar bisa pilih file sama lagi
+        if (!file) return;
+
+        if (!confirm("Restore akan MENGGANTI seluruh data saat ini dengan isi backup. Lanjutkan?")) return;
+
+        try {
+            const text = await file.text();
+            const payload = JSON.parse(text);
+
+            const { data } = await api("/api/restore", { method: "POST", body: JSON.stringify(payload) });
+            setToolsStatus(`✅ Restore berhasil: ${data.imported} handler diimpor.`, "ok");
+            loadHandlers();
+        } catch (err) {
+            const msg = err instanceof SyntaxError ? "File bukan JSON yang valid." : err.message;
+            setToolsStatus(`❌ ${msg}`, "err");
+        }
+    });
+
+    // Sync dari channel ranking Discord
+    el.syncBtn.addEventListener("click", async () => {
+        if (!confirm("Sync akan menimpa totalDone mengikuti data leaderboard di channel ranking. Lanjutkan?")) return;
+
+        el.syncBtn.disabled = true;
+        setToolsStatus("⏳ Mengambil data dari channel ranking...");
+
+        try {
+            const { data } = await api("/api/sync-ranking", { method: "POST" });
+            setToolsStatus(`✅ Sync berhasil: ${data.updated} handler diupdate dari channel ranking.`, "ok");
+            loadHandlers();
+        } catch (err) {
+            if (err.status === 401) return showView("login");
+            setToolsStatus(`❌ ${err.message}`, "err");
+        } finally {
+            el.syncBtn.disabled = false;
+        }
+    });
 
     // ================= EDIT MODAL =================
     function openEditModal(userId) {

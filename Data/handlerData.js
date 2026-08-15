@@ -201,6 +201,78 @@ function deleteHandler(userId) {
     return true;
 }
 
+/**
+ * Buat/timpa entry handler (admin, dipakai untuk sync & restore).
+ * @param {string} userId
+ * @param {object} data
+ * @returns {object} data terbaru
+ */
+function upsertHandler(userId, data = {}) {
+    handlers.set(userId, {
+        maxJob: Number(data.maxJob) || 0,
+        currentJob: Number(data.currentJob) || 0,
+        jobs: Array.isArray(data.jobs) ? data.jobs : [],
+        services: Array.isArray(data.services) ? data.services : [],
+        totalDone: Number(data.totalDone) || 0
+    });
+    saveData();
+    return getHandler(userId);
+}
+
+// ================= BACKUP & RESTORE =================
+/**
+ * Export seluruh data untuk backup (admin).
+ * @returns {object} snapshot data lengkap
+ */
+function exportData() {
+    return {
+        format: "bot-barokah-backup",
+        version: 1,
+        exportedAt: new Date().toISOString(),
+        handlers: Object.fromEntries(handlers),
+        rankingChannelId,
+        rankingMessageId
+    };
+}
+
+/**
+ * Import data dari backup: ganti seluruh data saat ini.
+ * @param {object} payload hasil exportData / file backup
+ * @returns {number} jumlah handler yang di-import
+ * @throws {Error} jika format tidak valid
+ */
+function importData(payload) {
+    if (!payload || typeof payload !== "object" || !payload.handlers || typeof payload.handlers !== "object") {
+        throw new Error("Format backup tidak valid (field 'handlers' tidak ditemukan).");
+    }
+
+    // Validasi dulu semua entry sebelum mengubah apa pun
+    const validated = new Map();
+    for (const [id, value] of Object.entries(payload.handlers)) {
+        if (!/^\d{5,25}$/.test(id)) throw new Error(`User ID tidak valid di backup: ${id}`);
+        if (!value || typeof value !== "object") throw new Error(`Data handler ${id} tidak valid.`);
+
+        validated.set(id, {
+            maxJob: Number(value.maxJob) || 0,
+            currentJob: Number(value.currentJob) || 0,
+            jobs: Array.isArray(value.jobs) ? value.jobs : [],
+            services: Array.isArray(value.services) ? value.services : [],
+            totalDone: Number(value.totalDone) || 0
+        });
+    }
+
+    // Terapkan setelah semua valid
+    handlers.clear();
+    for (const [id, data] of validated) handlers.set(id, data);
+
+    if (payload.rankingChannelId) rankingChannelId = String(payload.rankingChannelId);
+    if (payload.rankingMessageId) rankingMessageId = String(payload.rankingMessageId);
+
+    saveData();
+    console.log(`📥 Restore backup: ${validated.size} handler.`);
+    return validated.size;
+}
+
 function addService(userId, serviceName) {
     const data = handlers.get(userId);
     if (!data) return false;
@@ -254,6 +326,102 @@ function setRankingMessage(id) {
 
 function getRankingMessage() {
     return rankingMessageId;
+}
+
+// ================= SYNC DARI CHANNEL RANKING =================
+/**
+ * Parsing satu entry leaderboard dari teks embed.
+ * Format yang ditulis updateLeaderboardEmbed:
+ *   🤖 **Handler :**
+ *    <@USERID>
+ *   📊 **Total Job :** NUM
+ * @param {string} text
+ * @returns {Array<{userId: string, totalDone: number}>}
+ */
+function parseLeaderboard(text) {
+    const results = [];
+    if (!text) return results;
+
+    // Tangkap pasangan: mention user lalu angka Total Job setelahnya
+    const pattern = /<@!?(\d{5,25})>[\s\S]*?📊\s*\*\*Total Job\s*:?\*\*\s*:?(\d+)/g;
+    let match;
+    while ((match = pattern.exec(text)) !== null) {
+        results.push({ userId: match[1], totalDone: Number(match[2]) });
+    }
+    return results;
+}
+
+/**
+ * Ambil data handler dari channel ranking di Discord, lalu replace data lokal.
+ * Berguna saat pindah server Railway / data lokal ter-reset: leaderboard di
+ * channel ranking jadi sumber kebenaran.
+ * @param {object} guild Discord guild
+ * @returns {Promise<{updated: number, entries: Array}>}
+ * @throws {Error} jika channel tidak ditemukan / leaderboard kosong
+ */
+async function syncFromRankingChannel(guild) {
+    if (!guild) throw new Error("Command ini harus dijalankan di server.");
+
+    const channelId = rankingChannelId;
+    if (!channelId) throw new Error("Channel ranking belum diatur. Jalankan /ranking dulu.");
+
+    const channel = await guild.channels.fetch(channelId).catch(() => null);
+    if (!channel || !channel.isTextBased()) {
+        throw new Error("Channel ranking tidak ditemukan atau bukan channel teks.");
+    }
+
+    // Kumpulkan teks dari message ranking (jika ada) + pesan-pesan terbaru sebagai fallback
+    let leaderboardText = "";
+
+    if (rankingMessageId) {
+        const msg = await channel.messages.fetch(rankingMessageId).catch(() => null);
+        if (msg) {
+            leaderboardText = [
+                msg.content,
+                ...(msg.embeds || []).map(e => e.description || "")
+            ].join("\n");
+        }
+    }
+
+    // Jika message spesifik tidak ada / kosong, scan beberapa pesan terakhir
+    if (leaderboardText.trim() === "") {
+        const recent = await channel.messages.fetch({ limit: 30 }).catch(() => null);
+        if (recent) {
+            const parts = [];
+            for (const [, m] of recent) {
+                parts.push(m.content || "");
+                for (const e of m.embeds || []) parts.push(e.description || "");
+            }
+            leaderboardText = parts.join("\n");
+        }
+    }
+
+    const entries = parseLeaderboard(leaderboardText);
+    if (entries.length === 0) {
+        throw new Error("Tidak menemukan data leaderboard di channel ranking.");
+    }
+
+    // Ganti data lokal mengikuti leaderboard (pertahankan totalDone tertinggi)
+    let updated = 0;
+    for (const { userId, totalDone } of entries) {
+        const existing = handlers.get(userId);
+        const keptTotal = existing
+            ? Math.max(Number(existing.totalDone) || 0, totalDone)
+            : totalDone;
+
+        handlers.set(userId, {
+            maxJob: existing ? existing.maxJob : 0,
+            currentJob: 0,
+            jobs: [],
+            services: existing ? existing.services : [],
+            totalDone: keptTotal
+        });
+        updated++;
+    }
+
+    saveData();
+    console.log(`🔄 Sync dari channel ranking: ${updated} handler diupdate.`);
+    return { updated, entries };
 }
 
 // ================= LEADERBOARD =================
@@ -322,5 +490,10 @@ module.exports = {
     updateLeaderboardEmbed,
     updateHandler,
     resetHandler,
-    deleteHandler
+    deleteHandler,
+    upsertHandler,
+    exportData,
+    importData,
+    parseLeaderboard,
+    syncFromRankingChannel
 };

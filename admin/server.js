@@ -20,6 +20,7 @@ const JSON_BODY_LIMIT = "100kb";
 
 const sessions = new Map(); // token -> expiresAt (ms)
 const loginAttempts = new Map(); // ip -> { count, resetAt }
+let discordClient = null; // di-set saat startAdminServer(client)
 
 // ================= UTIL =================
 function timingSafeEqual(a, b) {
@@ -183,6 +184,47 @@ app.delete("/api/handlers/:id", requireAuth, (req, res) => {
     res.json({ success: true });
 });
 
+// ================= BACKUP / RESTORE / SYNC =================
+// Download backup data (JSON)
+app.get("/api/backup", requireAuth, (req, res) => {
+    const backup = handler.exportData();
+    const filename = `backup-${new Date().toISOString().slice(0, 10)}.json`;
+    res.setHeader("Content-Type", "application/json");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.json(backup);
+});
+
+// Restore data dari backup JSON (di-paste/upload oleh admin)
+app.post("/api/restore", requireAuth, (req, res) => {
+    try {
+        const count = handler.importData(req.body || {});
+        res.json({ success: true, data: { imported: count } });
+    } catch (err) {
+        res.status(400).json({ success: false, error: err.message });
+    }
+});
+
+// Sync data lokal mengikuti leaderboard di channel ranking Discord
+app.post("/api/sync-ranking", requireAuth, async (req, res) => {
+    if (!discordClient || !discordClient.isReady()) {
+        return res.status(503).json({ success: false, error: "Discord client belum siap." });
+    }
+
+    try {
+        // Prioritaskan guild dari GUILD_ID env, fallback ke guild pertama di cache
+        const guild = (process.env.GUILD_ID && discordClient.guilds.cache.get(process.env.GUILD_ID))
+            || discordClient.guilds.cache.first();
+
+        if (!guild) {
+            return res.status(404).json({ success: false, error: "Bot belum masuk ke server mana pun." });
+        }
+        const result = await handler.syncFromRankingChannel(guild);
+        res.json({ success: true, data: result });
+    } catch (err) {
+        res.status(400).json({ success: false, error: err.message });
+    }
+});
+
 // ================= FALLBACK =================
 // SPA fallback: semua GET non-API mengarah ke index.html (Express 5 syntax)
 app.use((req, res, next) => {
@@ -206,7 +248,9 @@ app.use((err, req, res, next) => {
 });
 
 // ================= START =================
-function startAdminServer() {
+function startAdminServer(client = null) {
+    discordClient = client;
+
     if (!ADMIN_PASSWORD) {
         console.warn("⚠️ ADMIN_PASSWORD belum diatur — admin panel aktif tapi login diblokir.");
     }

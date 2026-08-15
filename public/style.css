@@ -262,6 +262,17 @@ body {
 .error-msg { color: var(--danger); font-size: 13px; margin-top: 10px; min-height: 16px; }
 
 /* ===== HANDLERS LIST ===== */
+.data-tools { margin-bottom: 16px; }
+
+.tool-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+
+.file-label {
+    display: inline-flex;
+    align-items: center;
+    cursor: pointer;
+}
+
+/* ===== HANDLERS ===== */
 .handlers-list { display: flex; flex-direction: column; gap: 12px; }
 
 .handler-card {

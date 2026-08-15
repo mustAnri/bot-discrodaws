@@ -26,7 +26,23 @@ Setelah deploy selesai:
 
 - ⚙️ Ubah Handler Role ID, Take/Done Log Channel, Ranking Channel — langsung dari browser
 - 👥 Lihat, edit, reset job, dan hapus data handler
+- 🛡️ **Backup & Restore** — download data sebagai file JSON, lalu restore saat pindah server/akun Railway (data tidak ikut hilang)
+- 🔄 **Sync dari Channel Ranking** — jika data lokal ter-reset, bot bisa membaca leaderboard di channel ranking dan menyamakan totalDone mengikutinya
 - 🔒 Login dengan password (`ADMIN_PASSWORD`), session 24 jam, rate-limit login
+
+### 💾 Backup / Restore / Sync (tab Handlers)
+
+| Tombol | Fungsi |
+|--------|--------|
+| **Download Backup** | Simpan seluruh data handler sebagai file `.json` |
+| **Restore Backup** | Upload file backup → mengganti seluruh data saat ini |
+| **Sync dari Channel Ranking** | Membaca pesan leaderboard di channel ranking Discord, lalu menyesuaikan `totalDone` (nilai tertinggi yang dipertahankan) |
+
+**Tips pindah akun/server Railway:**
+1. Sebelum pindah → klik **Download Backup**
+2. Deploy repo di akun baru
+3. Buka admin panel → **Restore Backup** dengan file tadi
+4. (Alternatif tanpa backup) gunakan **Sync dari Channel Ranking** selama leaderboard masih ada di channel
 
 ## 🛠️ Menjalankan Lokal
 

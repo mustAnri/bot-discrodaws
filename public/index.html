@@ -76,6 +76,23 @@
 
             <!-- ========== TAB: HANDLERS ========== -->
             <section id="tab-handlers" class="tab-panel hidden">
+                <div class="panel data-tools">
+                    <h2>🛡️ Data & Backup</h2>
+                    <p class="panel-desc">
+                        Backup data sebelum pindah server Railway, restore saat pindah,
+                        atau sync mengikuti leaderboard di channel ranking.
+                    </p>
+                    <div class="tool-actions">
+                        <button id="backup-btn" class="btn btn-ghost">💾 Download Backup</button>
+                        <label class="btn btn-ghost file-label">
+                            📥 Restore Backup
+                            <input type="file" id="restore-file" accept=".json,application/json" hidden>
+                        </label>
+                        <button id="sync-btn" class="btn btn-ghost">🔄 Sync dari Channel Ranking</button>
+                    </div>
+                    <p id="tools-status" class="status-msg"></p>
+                </div>
+
                 <div class="panel">
                     <div class="panel-head">
                         <div>
