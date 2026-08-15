@@ -3,71 +3,85 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bot Barokah — Admin Panel</title>
+    <title>OPS CONSOLE — Handler Management</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-    <!-- ================= LOGIN VIEW ================= -->
+    <!-- ================= LOGIN ================= -->
     <div id="login-view" class="login-wrap hidden">
-        <form id="login-form" class="login-card">
-            <div class="login-logo">🤖</div>
-            <h1>Bot Barokah</h1>
-            <p class="login-subtitle">Admin Panel</p>
-            <label for="password">Password Admin</label>
-            <input type="password" id="password" placeholder="••••••••" autocomplete="current-password" required>
-            <button type="submit" id="login-btn">Masuk</button>
-            <p id="login-error" class="error-msg"></p>
-        </form>
+        <div class="login-frame">
+            <div class="login-tag">SYSTEM ACCESS // RESTRICTED</div>
+            <h1 class="login-title">OPS<em>CONSOLE</em></h1>
+            <p class="login-sub">HANDLER MANAGEMENT SYSTEM</p>
+            <form id="login-form" class="login-form">
+                <label for="password">ACCESS KEY</label>
+                <input type="password" id="password" placeholder="••••••••••••" autocomplete="current-password" required>
+                <button type="submit" id="login-btn" class="btn btn-primary btn-block">AUTHENTICATE ▸</button>
+                <p id="login-error" class="error-msg"></p>
+            </form>
+        </div>
     </div>
 
-    <!-- ================= DASHBOARD VIEW ================= -->
+    <!-- ================= DASHBOARD ================= -->
     <div id="dashboard-view" class="hidden">
         <header class="topbar">
-            <div class="topbar-brand">
-                <span class="topbar-logo">🤖</span>
-                <span class="topbar-title">Bot Barokah <em>Admin</em></span>
+            <div class="brand">
+                <div class="brand-mark" aria-hidden="true">▚▞</div>
+                <div class="brand-text">
+                    <strong>OPS CONSOLE</strong>
+                    <span>HANDLER MANAGEMENT</span>
+                </div>
             </div>
-            <div class="topbar-actions">
-                <span id="conn-status" class="conn-status"></span>
-                <button id="logout-btn" class="btn btn-ghost">Logout</button>
+            <div class="topbar-right">
+                <div class="led-group" role="status">
+                    <span class="led led-on"></span>
+                    <span id="conn-status" class="led-label">ONLINE</span>
+                </div>
+                <button id="logout-btn" class="btn btn-ghost btn-sm">LOGOUT</button>
             </div>
         </header>
 
-        <nav class="tabs">
-            <button class="tab active" data-tab="settings">⚙️ Pengaturan</button>
-            <button class="tab" data-tab="handlers">👥 Handlers</button>
+        <nav class="tabs" aria-label="Menu utama">
+            <button class="tab active" data-tab="settings"><span class="tab-idx">01</span> KONFIGURASI</button>
+            <button class="tab" data-tab="handlers"><span class="tab-idx">02</span> HANDLERS</button>
         </nav>
 
         <main class="content">
-            <!-- ========== TAB: PENGATURAN ========== -->
+            <!-- ========== TAB: KONFIGURASI ========== -->
             <section id="tab-settings" class="tab-panel">
                 <div class="panel">
-                    <h2>Pengaturan Bot</h2>
-                    <p class="panel-desc">Ubah ID role & channel yang dipakai bot. Semua perubahan langsung tersimpan.</p>
+                    <header class="panel-head">
+                        <div class="panel-kicker">SEC.01 // KONFIGURASI</div>
+                        <h2>ID Role &amp; Channel</h2>
+                        <p class="panel-desc">Semua perubahan langsung tersimpan ke config dan dipakai bot secara real-time.</p>
+                    </header>
                     <form id="settings-form" class="settings-form">
                         <div class="field">
-                            <label for="handlerRoleId">🎭 Handler Role ID</label>
+                            <label for="handlerRoleId">HANDLER ROLE ID</label>
                             <input type="text" id="handlerRoleId" inputmode="numeric" placeholder="contoh: 1434214694503055552">
                             <small>Role yang boleh memakai /join, /take, /done</small>
                         </div>
                         <div class="field">
-                            <label for="takeLogChannelId">📥 Take Log Channel ID</label>
+                            <label for="takeLogChannelId">TAKE LOG CHANNEL</label>
                             <input type="text" id="takeLogChannelId" inputmode="numeric" placeholder="contoh: 1472619243005546701">
                             <small>Channel tempat log /take dikirim</small>
                         </div>
                         <div class="field">
-                            <label for="doneLogChannelId">✅ Done Log Channel ID</label>
+                            <label for="doneLogChannelId">DONE LOG CHANNEL</label>
                             <input type="text" id="doneLogChannelId" inputmode="numeric" placeholder="contoh: 1472619337893282033">
                             <small>Channel tempat log /done dikirim</small>
                         </div>
                         <div class="field">
-                            <label for="rankingChannelId">🏆 Ranking Channel ID</label>
+                            <label for="rankingChannelId">RANKING CHANNEL</label>
                             <input type="text" id="rankingChannelId" inputmode="numeric" placeholder="contoh: 1472669808964276274">
                             <small>Channel leaderboard (default untuk /ranking)</small>
                         </div>
                         <div class="form-actions">
-                            <button type="submit" class="btn btn-primary">💾 Simpan Pengaturan</button>
-                            <button type="button" id="settings-reload" class="btn btn-ghost">↻ Muat Ulang</button>
+                            <button type="submit" class="btn btn-primary">SIMPAN KONFIGURASI</button>
+                            <button type="button" id="settings-reload" class="btn btn-ghost">↻ MUAT ULANG</button>
                         </div>
                     </form>
                     <p id="settings-status" class="status-msg"></p>
@@ -76,57 +90,59 @@
 
             <!-- ========== TAB: HANDLERS ========== -->
             <section id="tab-handlers" class="tab-panel hidden">
-                <div class="panel data-tools">
-                    <h2>🛡️ Data & Backup</h2>
-                    <p class="panel-desc">
-                        Backup data sebelum pindah server Railway, restore saat pindah,
-                        atau sync mengikuti leaderboard di channel ranking.
-                    </p>
+                <div class="panel">
+                    <header class="panel-head">
+                        <div class="panel-kicker">SEC.02 // BACKUP &amp; SYNC</div>
+                        <h2>Pemulihan Data</h2>
+                        <p class="panel-desc">Backup sebelum pindah server, restore saat pindah, atau sync mengikuti leaderboard channel ranking.</p>
+                    </header>
                     <div class="tool-actions">
-                        <button id="backup-btn" class="btn btn-ghost">💾 Download Backup</button>
+                        <button id="backup-btn" class="btn btn-ghost">⬇ DOWNLOAD BACKUP</button>
                         <label class="btn btn-ghost file-label">
-                            📥 Restore Backup
+                            ⬆ RESTORE BACKUP
                             <input type="file" id="restore-file" accept=".json,application/json" hidden>
                         </label>
-                        <button id="sync-btn" class="btn btn-ghost">🔄 Sync dari Channel Ranking</button>
+                        <button id="sync-btn" class="btn btn-ghost">⇄ SYNC DARI RANKING</button>
                     </div>
                     <p id="tools-status" class="status-msg"></p>
                 </div>
 
                 <div class="panel">
-                    <div class="panel-head">
+                    <header class="panel-head row">
                         <div>
-                            <h2>Data Handlers</h2>
-                            <p class="panel-desc">Kelola handler: edit statistik, reset job, atau hapus.</p>
+                            <div class="panel-kicker">SEC.03 // DATA HANDLER</div>
+                            <h2>Daftar Handler</h2>
+                            <p class="panel-desc">Klik EDIT untuk ubah statistik, RESET untuk kosongkan job aktif, HAPUS untuk menghapus total.</p>
                         </div>
-                        <button id="handlers-reload" class="btn btn-ghost">↻ Refresh</button>
-                    </div>
+                        <button id="handlers-reload" class="btn btn-ghost btn-sm">↻ REFRESH</button>
+                    </header>
                     <div id="handlers-list" class="handlers-list"></div>
                 </div>
             </section>
         </main>
     </div>
 
-    <!-- ================= EDIT HANDLER MODAL ================= -->
+    <!-- ================= MODAL EDIT ================= -->
     <div id="edit-modal" class="modal hidden">
         <div class="modal-card">
-            <h3>Edit Handler <span id="edit-user-id"></span></h3>
+            <div class="panel-kicker">EDIT RECORD</div>
+            <h3>HANDLER <span id="edit-user-id"></span></h3>
             <form id="edit-form">
                 <div class="field">
-                    <label for="edit-maxJob">Max Job (0–5)</label>
+                    <label for="edit-maxJob">MAX JOB (0–5)</label>
                     <input type="number" id="edit-maxJob" min="0" max="5" step="1" required>
                 </div>
                 <div class="field">
-                    <label for="edit-totalDone">Total Done</label>
+                    <label for="edit-totalDone">TOTAL DONE</label>
                     <input type="number" id="edit-totalDone" min="0" step="1" required>
                 </div>
                 <div class="field">
-                    <label for="edit-services">Services (pisahkan dengan koma)</label>
+                    <label for="edit-services">SERVICES (pisahkan dengan koma)</label>
                     <input type="text" id="edit-services" placeholder="PTHT, PNB">
                 </div>
                 <div class="form-actions">
-                    <button type="submit" class="btn btn-primary">Simpan</button>
-                    <button type="button" id="edit-cancel" class="btn btn-ghost">Batal</button>
+                    <button type="submit" class="btn btn-primary">SIMPAN</button>
+                    <button type="button" id="edit-cancel" class="btn btn-ghost">BATAL</button>
                 </div>
             </form>
             <p id="edit-error" class="error-msg"></p>

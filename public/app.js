@@ -125,7 +125,7 @@
             for (const field of SETTINGS_FIELDS) {
                 document.getElementById(field).value = data[field] || "";
             }
-            el.connStatus.textContent = "● Terhubung";
+            el.connStatus.textContent = "ONLINE";
         } catch (err) {
             if (err.status === 401) return showView("login");
             el.settingsStatus.textContent = `Gagal memuat: ${err.message}`;
@@ -172,32 +172,54 @@
             .sort((a, b) => (b[1].totalDone || 0) - (a[1].totalDone || 0));
 
         if (entries.length === 0) {
-            el.handlersList.innerHTML = `<div class="empty-state">Belum ada handler terdaftar.</div>`;
+            el.handlersList.innerHTML = `<div class="empty-state">— BELUM ADA HANDLER TERDAFTAR —</div>`;
             return;
         }
 
-        el.handlersList.innerHTML = entries.map(([userId, h]) => {
+        el.handlersList.innerHTML = entries.map(([userId, h], index) => {
             const jobs = h.jobs || [];
+            const maxJob = h.maxJob ?? 0;
+            const activeJobs = jobs.length;
+
+            // Status slot: ready / partial / full
+            let statusClass = "s-ready";
+            let slotLabel = "READY";
+            if (maxJob > 0 && activeJobs >= maxJob) {
+                statusClass = "s-full";
+                slotLabel = "FULL";
+            } else if (activeJobs > 0) {
+                statusClass = "s-partial";
+                slotLabel = "BUSY";
+            }
+
             const services = (h.services || []).map(s => `<span class="chip">${escapeHtml(s)}</span>`).join("");
             const jobChips = jobs.map(j =>
-                `<span class="chip jobs" title="${escapeHtml(j.order || "")} / ${escapeHtml(j.world || "")}">📋 ${escapeHtml(j.order || "job")}</span>`
+                `<span class="chip jobs" title="${escapeHtml(j.order || "")} / ${escapeHtml(j.world || "")}">▸ ${escapeHtml(j.order || "job")}</span>`
             ).join("");
 
             return `
-            <div class="handler-card">
+            <div class="handler-card ${statusClass}" style="animation-delay:${index * 0.05}s">
                 <div class="handler-info">
-                    <div class="handler-user">&lt;@${escapeHtml(userId)}&gt;</div>
+                    <div class="handler-user">
+                        &lt;@${escapeHtml(userId)}&gt;
+                        <span class="slot ${statusClass}">${slotLabel}</span>
+                    </div>
                     <div class="handler-stats">
-                        <span>Max Job: <b>${h.maxJob ?? 0}</b></span>
-                        <span>Job Aktif: <b>${jobs.length}</b></span>
-                        <span>Total Done: <b>${h.totalDone ?? 0}</b></span>
+                        <div class="stat">
+                            <span class="stat-label">SLOTS</span>
+                            <span class="stat-value">${activeJobs}/${maxJob}</span>
+                        </div>
+                        <div class="stat">
+                            <span class="stat-label">TOTAL DONE</span>
+                            <span class="stat-value accent">${h.totalDone ?? 0}</span>
+                        </div>
                     </div>
                     <div class="handler-services">${services}${jobChips}</div>
                 </div>
                 <div class="handler-actions">
-                    <button class="btn btn-ghost btn-sm" data-action="edit" data-id="${escapeHtml(userId)}">✏️ Edit</button>
-                    <button class="btn btn-ghost btn-sm" data-action="reset" data-id="${escapeHtml(userId)}">♻️ Reset Job</button>
-                    <button class="btn btn-danger btn-sm" data-action="delete" data-id="${escapeHtml(userId)}">🗑️ Hapus</button>
+                    <button class="btn btn-ghost btn-sm" data-action="edit" data-id="${escapeHtml(userId)}">EDIT</button>
+                    <button class="btn btn-ghost btn-sm" data-action="reset" data-id="${escapeHtml(userId)}">RESET JOB</button>
+                    <button class="btn btn-danger btn-sm" data-action="delete" data-id="${escapeHtml(userId)}">HAPUS</button>
                 </div>
             </div>`;
         }).join("");
