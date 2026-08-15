@@ -7,6 +7,8 @@ const cookieParser = require("cookie-parser");
 
 const handler = require("../Data/handlerData");
 const config = require("../Data/config");
+const logStore = require("./logStore");
+const systemInfo = require("./systemInfo");
 
 // ================= KONSTANTA =================
 const PORT = Number(process.env.PORT) || 3000;
@@ -20,7 +22,10 @@ const JSON_BODY_LIMIT = "100kb";
 
 const sessions = new Map(); // token -> expiresAt (ms)
 const loginAttempts = new Map(); // ip -> { count, resetAt }
+const actionCooldowns = new Map(); // key -> lastRun (ms), untuk rate-limit aksi berat
 let discordClient = null; // di-set saat startAdminServer(client)
+
+const COOLDOWN_MS = 30000; // 30 detik antar aksi speed/clear-memory
 
 // ================= UTIL =================
 function timingSafeEqual(a, b) {
@@ -37,6 +42,36 @@ function isValidUserId(id) {
 
 function isProduction() {
     return process.env.NODE_ENV === "production" || Boolean(process.env.RAILWAY_PROJECT_ID);
+}
+
+function inCooldown(key) {
+    const last = actionCooldowns.get(key) || 0;
+    if (Date.now() - last < COOLDOWN_MS) return true;
+    actionCooldowns.set(key, Date.now());
+    return false;
+}
+
+// Pangkas cache pesan discord.js yang aman dibuang (mengurangi RAM saat idle)
+const SWEEP_LIFETIME_MS = 30 * 60 * 1000; // buang pesan cache lebih tua dari 30 menit
+
+/**
+ * Sweep cache pesan lama dari semua channel yang ter-cache.
+ * @returns {number} jumlah pesan yang dibuang dari cache
+ */
+function sweepDiscordCaches() {
+    if (!discordClient || !discordClient.isReady()) return 0;
+    let swept = 0;
+    try {
+        const isOldMessage = (msg) => Date.now() - msg.createdTimestamp > SWEEP_LIFETIME_MS;
+        for (const [, channel] of discordClient.channels.cache) {
+            if (channel.messages && typeof channel.messages.cache.sweep === "function") {
+                swept += channel.messages.cache.sweep(isOldMessage);
+            }
+        }
+    } catch (err) {
+        console.warn("Sweep cache gagal:", err.message);
+    }
+    return swept;
 }
 
 // ================= MIDDLEWARE =================
@@ -223,6 +258,91 @@ app.post("/api/sync-ranking", requireAuth, async (req, res) => {
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
     }
+});
+
+// ================= SYSTEM MONITORING =================
+// Info spesifikasi & status server (+ ping ke Discord)
+app.get("/api/system", requireAuth, async (req, res) => {
+    const info = systemInfo.getSystemInfo({
+        ready: Boolean(discordClient && discordClient.isReady()),
+        guildCount: discordClient && discordClient.isReady() ? discordClient.guilds.cache.size : null
+    });
+    info.network = { discordPingMs: await systemInfo.pingDiscord() };
+    res.json({ success: true, data: info });
+});
+
+// Log ring buffer (polling: kirim ?after=<ISO timestamp> untuk delta)
+app.get("/api/logs", requireAuth, (req, res) => {
+    const after = typeof req.query.after === "string" ? req.query.after : null;
+    res.json({ success: true, data: logStore.getLogs(after) });
+});
+
+// Bersihkan buffer log
+app.post("/api/logs/clear", requireAuth, (req, res) => {
+    logStore.clear();
+    res.json({ success: true });
+});
+
+// Bersihkan memori: GC (jika tersedia) + pangkas cache discord.js
+app.post("/api/system/clear-memory", requireAuth, (req, res) => {
+    if (inCooldown("clear-memory")) {
+        return res.status(429).json({
+            success: false,
+            error: "Tunggu sebentar sebelum menjalankan lagi (cooldown 30 detik)."
+        });
+    }
+
+    const sweptMessages = sweepDiscordCaches();
+    const { gcRan, heapBeforeMB, heapAfterMB } = systemInfo.clearMemory();
+
+    console.log(`🧹 Clear memory: GC=${gcRan}, heap ${heapBeforeMB}MB → ${heapAfterMB}MB, pesan cache dibuang=${sweptMessages}`);
+    res.json({
+        success: true,
+        data: {
+            gcRan,
+            gcHint: gcRan ? "" : "Tambahkan --expose-gc di start command Railway agar GC manual aktif.",
+            heapBeforeMB,
+            heapAfterMB,
+            sweptMessages
+        }
+    });
+});
+
+// Speed test internet (async — polling status, bisa makan ~20 detik)
+const speedTestState = { busy: false, result: null, error: null };
+
+app.post("/api/system/speed", requireAuth, (req, res) => {
+    if (speedTestState.busy) {
+        return res.status(409).json({ success: false, error: "Speed test sedang berjalan." });
+    }
+    if (inCooldown("speed-test")) {
+        return res.status(429).json({
+            success: false,
+            error: "Tunggu sebentar sebelum menjalankan lagi (cooldown 30 detik)."
+        });
+    }
+
+    speedTestState.busy = true;
+    speedTestState.result = null;
+    speedTestState.error = null;
+
+    systemInfo.runSpeedTest()
+        .then((result) => {
+            speedTestState.result = result;
+            console.log(`🌐 Speed test: ${result.downMbps} Mbps download, latensi ${result.latencyMs}ms`);
+        })
+        .catch((err) => {
+            speedTestState.error = err.message;
+            console.error("Speed test gagal:", err.message);
+        })
+        .finally(() => { speedTestState.busy = false; });
+
+    res.json({ success: true, data: { started: true } });
+});
+
+// Status/hasil speed test (untuk polling dari UI)
+app.get("/api/system/speed/status", requireAuth, (req, res) => {
+    res.json({ success: true, data: { ...speedTestState } });
 });
 
 // ================= FALLBACK =================

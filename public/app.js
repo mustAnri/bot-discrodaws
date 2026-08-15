@@ -31,11 +31,20 @@
         editServices: document.getElementById("edit-services"),
         editCancel: document.getElementById("edit-cancel"),
         editError: document.getElementById("edit-error"),
-        toast: document.getElementById("toast")
+        toast: document.getElementById("toast"),
+        sysReload: document.getElementById("sys-reload"),
+        clearMemBtn: document.getElementById("clear-mem-btn"),
+        speedBtn: document.getElementById("speed-btn"),
+        clearLogsBtn: document.getElementById("clear-logs-btn"),
+        logConsole: document.getElementById("log-console")
     };
 
     let editingUserId = null;
     let toastTimer = null;
+    let sysPollTimer = null;
+    let logPollTimer = null;
+    let lastLogTs = null;
+    let activeTab = "settings";
 
     // ================= UTIL =================
     async function api(path, options = {}) {
@@ -115,6 +124,8 @@
             const target = tab.dataset.tab;
             document.getElementById("tab-settings").classList.toggle("hidden", target !== "settings");
             document.getElementById("tab-handlers").classList.toggle("hidden", target !== "handlers");
+            document.getElementById("tab-system").classList.toggle("hidden", target !== "system");
+            onTabSwitch(target);
         });
     });
 
@@ -375,6 +386,204 @@
     el.editModal.addEventListener("click", (e) => {
         if (e.target === el.editModal) closeEditModal();
     });
+
+    // ================= SYSTEM MONITORING =================
+    const SYSTEM_POLL_MS = 5000;
+    const LOG_POLL_MS = 2500;
+    const MAX_LOG_LINES = 400;
+
+    function formatUptime(totalSec) {
+        const d = Math.floor(totalSec / 86400);
+        const h = Math.floor((totalSec % 86400) / 3600);
+        const m = Math.floor((totalSec % 3600) / 60);
+        const parts = [];
+        if (d > 0) parts.push(`${d}h`);
+        if (h > 0 || d > 0) parts.push(`${h}j`);
+        parts.push(`${m}m`);
+        return parts.join(" ");
+    }
+
+    function setText(id, value) {
+        const node = document.getElementById(id);
+        if (node) node.textContent = value;
+    }
+
+    async function loadSystemInfo() {
+        try {
+            const { data } = await api("/api/system");
+            const p = data.process;
+            const h = data.host;
+
+            setText("sys-status", data.bot.ready ? "ONLINE" : "OFFLINE");
+            setText("sys-uptime", formatUptime(p.uptimeSec));
+            setText("sys-heap", `${p.heapUsedMB} MB`);
+            setText("sys-ram", `${h.freeMemGB}/${h.totalMemGB} GB`);
+            setText("sys-cpu", `${h.cpuLoad1m} (${h.cpus} core)`);
+            setText("sys-ping", data.network.discordPingMs === null
+                ? "GAGAL"
+                : `${data.network.discordPingMs} ms`);
+
+            const memPct = h.totalMemBytes > 0
+                ? Math.min(100, ((p.rssMB * 1e6) / h.totalMemBytes) * 100)
+                : 0;
+            document.getElementById("mem-bar-fill").style.width = `${memPct.toFixed(1)}%`;
+            setText("mem-legend", `rss ${p.rssMB} MB · heap ${p.heapUsedMB}/${p.heapTotalMB} MB`);
+
+            setText("net-spec",
+                `HOSTNAME : ${h.hostname}\n` +
+                `OS       : ${h.platform} (${h.arch})\n` +
+                `NODE     : ${h.node}\n` +
+                `CPU      : ${h.cpuModel} × ${h.cpus}\n` +
+                `RAM      : ${h.totalMemGB} GB total · ${h.freeMemGB} GB free\n` +
+                `PID      : ${p.pid} · guild aktif: ${data.bot.guildCount ?? "—"}`
+            );
+        } catch (err) {
+            if (err.status === 401) return showView("login");
+            setText("sys-status", "ERROR");
+        }
+    }
+
+    // ---- Logs ----
+    function appendLogLines(lines) {
+        if (lines.length === 0) return;
+        const frag = document.createDocumentFragment();
+        for (const line of lines) {
+            const div = document.createElement("div");
+            div.className = `log-line ${line.level}`;
+
+            const time = document.createElement("span");
+            time.className = "log-time";
+            time.textContent = line.ts.slice(11, 19);
+
+            const level = document.createElement("span");
+            level.className = `log-level ${line.level}`;
+            level.textContent = line.level;
+
+            const msg = document.createElement("span");
+            msg.className = "log-msg";
+            msg.textContent = line.msg;
+
+            div.append(time, level, msg);
+            frag.appendChild(div);
+        }
+
+        const isAtBottom = el.logConsole.scrollHeight - el.logConsole.scrollTop - el.logConsole.clientHeight < 60;
+        el.logConsole.appendChild(frag);
+
+        while (el.logConsole.children.length > MAX_LOG_LINES) {
+            el.logConsole.removeChild(el.logConsole.firstChild);
+        }
+        if (isAtBottom) el.logConsole.scrollTop = el.logConsole.scrollHeight;
+    }
+
+    async function pollLogs(full = false) {
+        try {
+            const query = (!full && lastLogTs) ? `?after=${encodeURIComponent(lastLogTs)}` : "";
+            const { data } = await api(`/api/logs${query}`);
+            if (data.length > 0) {
+                appendLogLines(data);
+                lastLogTs = data[data.length - 1].ts;
+            }
+        } catch (err) {
+            if (err.status === 401) showView("login");
+        }
+    }
+
+    // ---- Clear memory ----
+    el.clearMemBtn.addEventListener("click", async () => {
+        el.clearMemBtn.disabled = true;
+        try {
+            const { data } = await api("/api/system/clear-memory", { method: "POST" });
+            const parts = [`heap ${data.heapBeforeMB}→${data.heapAfterMB} MB`, `pesan cache dibuang: ${data.sweptMessages}`];
+            if (data.gcHint) parts.push(data.gcHint);
+            showToast(`🧹 ${parts.join(" · ")}`);
+            loadSystemInfo();
+        } catch (err) {
+            showToast(err.message, "err");
+        } finally {
+            el.clearMemBtn.disabled = false;
+        }
+    });
+
+    // ---- Speed test (async: start → polling status) ----
+    let speedPollTimer = null;
+
+    async function pollSpeedStatus() {
+        try {
+            const { data } = await api("/api/system/speed/status");
+            if (data.busy) {
+                setText("net-status", "⏳ Speed test berjalan...");
+                document.getElementById("net-status").className = "status-msg";
+                return;
+            }
+
+            clearInterval(speedPollTimer);
+            speedPollTimer = null;
+            el.speedBtn.disabled = false;
+
+            if (data.error) {
+                setText("net-status", `❌ ${data.error}`);
+                document.getElementById("net-status").className = "status-msg err";
+                return;
+            }
+            if (data.result) {
+                setText("net-down", `${data.result.downMbps} Mbps`);
+                setText("net-latency", data.result.latencyMs === null ? "—" : `${data.result.latencyMs} ms`);
+                setText("net-elapsed", `${(data.result.elapsedMs / 1000).toFixed(1)} s`);
+                setText("net-status", "✅ Speed test selesai.");
+                document.getElementById("net-status").className = "status-msg ok";
+            }
+        } catch (err) {
+            clearInterval(speedPollTimer);
+            el.speedBtn.disabled = false;
+        }
+    }
+
+    el.speedBtn.addEventListener("click", async () => {
+        el.speedBtn.disabled = true;
+        setText("net-status", "🚀 Memulai speed test...");
+        document.getElementById("net-status").className = "status-msg";
+        setText("net-down", "…");
+
+        try {
+            await api("/api/system/speed", { method: "POST" });
+            speedPollTimer = setInterval(pollSpeedStatus, 2000);
+        } catch (err) {
+            el.speedBtn.disabled = false;
+            setText("net-status", `❌ ${err.message}`);
+            document.getElementById("net-status").className = "status-msg err";
+        }
+    });
+
+    // ---- Clear logs ----
+    el.clearLogsBtn.addEventListener("click", async () => {
+        try {
+            await api("/api/logs/clear", { method: "POST" });
+            el.logConsole.innerHTML = "";
+            lastLogTs = null;
+            showToast("Log dibersihkan");
+        } catch (err) {
+            showToast(err.message, "err");
+        }
+    });
+
+    el.sysReload.addEventListener("click", loadSystemInfo);
+
+    // ---- Polling lifecycle: hanya jalan saat tab SYSTEM aktif ----
+    function onTabSwitch(tab) {
+        activeTab = tab;
+        if (tab === "system") {
+            loadSystemInfo();
+            pollLogs(true);
+            sysPollTimer = setInterval(loadSystemInfo, SYSTEM_POLL_MS);
+            logPollTimer = setInterval(() => pollLogs(false), LOG_POLL_MS);
+        } else {
+            clearInterval(sysPollTimer);
+            clearInterval(logPollTimer);
+            sysPollTimer = null;
+            logPollTimer = null;
+        }
+    }
 
     // ================= INIT =================
     function initDashboard() {

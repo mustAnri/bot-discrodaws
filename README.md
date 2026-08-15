@@ -28,6 +28,7 @@ Setelah deploy selesai:
 - 👥 Lihat, edit, reset job, dan hapus data handler
 - 🛡️ **Backup & Restore** — download data sebagai file JSON, lalu restore saat pindah server/akun Railway (data tidak ikut hilang)
 - 🔄 **Sync dari Channel Ranking** — jika data lokal ter-reset, bot bisa membaca leaderboard di channel ranking dan menyamakan totalDone mengikutinya
+- 🖥️ **Tab SYSTEM** — status server live (uptime, RAM, CPU, ping Discord), spesifikasi host, speed test internet, live logs, dan tombol Clear Memory (GC + pangkas cache)
 - 🔒 Login dengan password (`ADMIN_PASSWORD`), session 24 jam, rate-limit login
 
 ### 💾 Backup / Restore / Sync (tab Handlers)

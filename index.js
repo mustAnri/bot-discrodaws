@@ -1,5 +1,9 @@
 require("dotenv").config();
 
+// Pasang log capture paling awal agar semua output tertangkap admin panel
+const { hookConsole } = require("./admin/logStore");
+hookConsole();
+
 const fs = require("fs");
 const path = require("path");
 const { Client, Collection, GatewayIntentBits } = require("discord.js");

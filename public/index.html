@@ -47,6 +47,7 @@
         <nav class="tabs" aria-label="Menu utama">
             <button class="tab active" data-tab="settings"><span class="tab-idx">01</span> KONFIGURASI</button>
             <button class="tab" data-tab="handlers"><span class="tab-idx">02</span> HANDLERS</button>
+            <button class="tab" data-tab="system"><span class="tab-idx">03</span> SYSTEM</button>
         </nav>
 
         <main class="content">
@@ -117,6 +118,66 @@
                         <button id="handlers-reload" class="btn btn-ghost btn-sm">↻ REFRESH</button>
                     </header>
                     <div id="handlers-list" class="handlers-list"></div>
+                </div>
+            </section>
+
+            <!-- ========== TAB: SYSTEM ========== -->
+            <section id="tab-system" class="tab-panel hidden">
+                <div class="panel">
+                    <header class="panel-head row">
+                        <div>
+                            <div class="panel-kicker">SEC.04 // HOST STATUS</div>
+                            <h2>Status Server</h2>
+                            <p class="panel-desc">Kondisi mesin tempat bot di-host. Di-refresh otomatis tiap 5 detik saat tab ini aktif.</p>
+                        </div>
+                        <button id="sys-reload" class="btn btn-ghost btn-sm">↻ REFRESH</button>
+                    </header>
+                    <div id="sys-tiles" class="sys-tiles">
+                        <div class="sys-tile"><span class="stat-label">STATUS</span><span class="stat-value" id="sys-status">—</span></div>
+                        <div class="sys-tile"><span class="stat-label">UPTIME</span><span class="stat-value" id="sys-uptime">—</span></div>
+                        <div class="sys-tile"><span class="stat-label">RAM (HEAP)</span><span class="stat-value accent" id="sys-heap">—</span></div>
+                        <div class="sys-tile"><span class="stat-label">RAM SERVER</span><span class="stat-value" id="sys-ram">—</span></div>
+                        <div class="sys-tile"><span class="stat-label">CPU LOAD</span><span class="stat-value" id="sys-cpu">—</span></div>
+                        <div class="sys-tile"><span class="stat-label">PING DISCORD</span><span class="stat-value" id="sys-ping">—</span></div>
+                    </div>
+                    <div class="mem-bar-wrap">
+                        <div class="stat-label">MEMORI PROSES</div>
+                        <div class="mem-bar"><div id="mem-bar-fill" class="mem-bar-fill"></div></div>
+                        <div class="mem-bar-legend">
+                            <span id="mem-legend">heap —</span>
+                            <button id="clear-mem-btn" class="btn btn-ghost btn-sm">🧹 CLEAR MEMORY</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="panel">
+                    <header class="panel-head row">
+                        <div>
+                            <div class="panel-kicker">SEC.05 // NETWORK</div>
+                            <h2>Spesifikasi &amp; Kecepatan Internet</h2>
+                            <p class="panel-desc">Speed test mengunduh ±25 MB dari CDN Cloudflare — bisa memakan waktu beberapa detik dan memakai bandwidth.</p>
+                        </div>
+                        <button id="speed-btn" class="btn btn-primary btn-sm">▶ JALANKAN SPEED TEST</button>
+                    </header>
+                    <div class="sys-tiles">
+                        <div class="sys-tile"><span class="stat-label">DOWNLOAD</span><span class="stat-value accent" id="net-down">—</span></div>
+                        <div class="sys-tile"><span class="stat-label">LATENSI CDN</span><span class="stat-value" id="net-latency">—</span></div>
+                        <div class="sys-tile"><span class="stat-label">DURASI TES</span><span class="stat-value" id="net-elapsed">—</span></div>
+                    </div>
+                    <div id="net-spec" class="net-spec"></div>
+                    <p id="net-status" class="status-msg"></p>
+                </div>
+
+                <div class="panel">
+                    <header class="panel-head row">
+                        <div>
+                            <div class="panel-kicker">SEC.06 // LIVE LOGS</div>
+                            <h2>Log Server</h2>
+                            <p class="panel-desc">400 baris terakhir, live (auto-scroll). Log asli juga tetap ada di dashboard Railway.</p>
+                        </div>
+                        <button id="clear-logs-btn" class="btn btn-danger btn-sm">🗑 CLEAR LOG</button>
+                    </header>
+                    <div id="log-console" class="log-console" aria-live="polite"></div>
                 </div>
             </section>
         </main>
