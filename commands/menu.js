@@ -26,6 +26,10 @@ Check which handler is ready for the job.
 Check Your Rank While Being a Handler.`
 );
 
-        interaction.reply({ embeds: [embed] });
+        try {
+            await interaction.reply({ embeds: [embed] });
+        } catch (error) {
+            console.error("❌ MENU ERROR:", error);
+        }
     }
 };

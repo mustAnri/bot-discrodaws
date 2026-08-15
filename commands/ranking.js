@@ -7,9 +7,8 @@ module.exports = {
     description: "Show LeaderBoard Handler",
 
     async execute(interaction) {
-        await interaction.deferReply({ ephemeral: false });
-
         try {
+            await interaction.deferReply({ ephemeral: false }); // di dalam try agar error tetap terbalas
             if (!interaction.guild) {
                 return interaction.editReply({
                     content: "❌ Command ini hanya bisa digunakan di server."
@@ -88,10 +87,14 @@ module.exports = {
 
         } catch (error) {
             console.error("❌ RANKING ERROR:", error);
-            if (interaction.deferred) {
-                await interaction.editReply({
-                    content: "❌ Terjadi error pada sistem."
-                });
+            try {
+                if (interaction.deferred || interaction.replied) {
+                    await interaction.editReply({ content: "❌ Terjadi error pada sistem." });
+                } else {
+                    await interaction.reply({ content: "❌ Terjadi error pada sistem." });
+                }
+            } catch (replyErr) {
+                console.error("❌ Gagal kirim balasan error /ranking:", replyErr);
             }
         }
     }

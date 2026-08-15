@@ -97,15 +97,19 @@ ${jobTypes.join(" & ")}`
         } catch (error) {
             console.error("JOIN ERROR:", error);
 
-            if (!interaction.replied && !interaction.deferred) {
-                await interaction.reply({
-                    content: "❌ Terjadi error pada sistem.",
-                    ephemeral: true
-                });
-            } else {
-                await interaction.editReply({
-                    content: "❌ Terjadi error setelah proses."
-                });
+            try {
+                if (!interaction.replied && !interaction.deferred) {
+                    await interaction.reply({
+                        content: "❌ Terjadi error pada sistem.",
+                        flags: 64
+                    });
+                } else {
+                    await interaction.editReply({
+                        content: "❌ Terjadi error setelah proses."
+                    });
+                }
+            } catch (replyErr) {
+                console.error("❌ Gagal kirim balasan error /join:", replyErr);
             }
         }
     }

@@ -7,9 +7,8 @@ module.exports = {
     description: "Done job",
 
     async execute(interaction) {
-        await interaction.deferReply();
-
         try {
+            await interaction.deferReply(); // di dalam try agar error tetap terbalas
             if (!interaction.guild)
                 return interaction.editReply({ content: "❌ Command can only be used in a server." });
 
@@ -98,8 +97,10 @@ Service 100% Completed Successfully.`
             const doneLogChannelId = config.getConfig().doneLogChannelId;
             const logChannel = await interaction.guild.channels.fetch(doneLogChannelId).catch(() => null);
             if (logChannel?.isTextBased()) {
-                logChannel.send({ embeds: [embed] })
-                    .catch(err => console.log("❌ Failed to send log:", err));
+                await logChannel.send({ embeds: [embed] })
+                    .catch(err => console.error("❌ Failed to send /done log (cek permission bot di channel):", err));
+            } else {
+                console.warn(`⚠️ Done log channel tidak ditemukan: ${doneLogChannelId} (cek Done Log Channel ID di admin panel)`);
             }
 
             // ================= BALAS KE USER =================
@@ -107,8 +108,14 @@ Service 100% Completed Successfully.`
 
         } catch (error) {
             console.error("❌ DONE ERROR:", error);
-            if (interaction.deferred) {
-                await interaction.editReply({ content: "❌ System error occurred." });
+            try {
+                if (interaction.deferred || interaction.replied) {
+                    await interaction.editReply({ content: "❌ System error occurred." });
+                } else {
+                    await interaction.reply({ content: "❌ System error occurred." });
+                }
+            } catch (replyErr) {
+                console.error("❌ Gagal kirim balasan error /done:", replyErr);
             }
         }
     }

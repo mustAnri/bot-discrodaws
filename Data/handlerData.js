@@ -330,7 +330,19 @@ function getRankingMessage() {
 
 // ================= SYNC DARI CHANNEL RANKING =================
 /**
- * Parsing satu entry leaderboard dari teks embed.
+ * Gabungkan content + deskripsi embed sebuah pesan jadi satu teks.
+ * @param {object} msg
+ * @returns {string}
+ */
+function messageText(msg) {
+    return [
+        msg.content || "",
+        ...(msg.embeds || []).map(e => e.description || "")
+    ].join("\n");
+}
+
+/**
+ * Parsing entry leaderboard dari teks embed.
  * Format yang ditulis updateLeaderboardEmbed:
  *   🤖 **Handler :**
  *    <@USERID>
@@ -352,75 +364,75 @@ function parseLeaderboard(text) {
 }
 
 /**
- * Ambil data handler dari channel ranking di Discord, lalu replace data lokal.
+ * Ambil data handler dari channel ranking di Discord, lalu REPLACE data lokal.
  * Berguna saat pindah server Railway / data lokal ter-reset: leaderboard di
- * channel ranking jadi sumber kebenaran.
+ * channel ranking jadi sumber kebenaran. Setelah data diganti, embed
+ * leaderboard di channel ikut di-refresh agar tampil sinkron.
  * @param {object} guild Discord guild
  * @returns {Promise<{updated: number, entries: Array}>}
  * @throws {Error} jika channel tidak ditemukan / leaderboard kosong
  */
 async function syncFromRankingChannel(guild) {
-    if (!guild) throw new Error("Command ini harus dijalankan di server.");
+    if (!guild) throw new Error("Harus dijalankan di server.");
 
-    const channelId = rankingChannelId;
-    if (!channelId) throw new Error("Channel ranking belum diatur. Jalankan /ranking dulu.");
+    // Prioritas channel: data tersimpan > config admin panel
+    const config = require("./config");
+    const channelId = rankingChannelId || config.getConfig().rankingChannelId;
+    if (!channelId) {
+        throw new Error("Channel ranking belum diatur. Atur di admin panel atau jalankan /ranking dulu.");
+    }
+    if (!rankingChannelId) setRankingChannel(channelId);
 
     const channel = await guild.channels.fetch(channelId).catch(() => null);
     if (!channel || !channel.isTextBased()) {
         throw new Error("Channel ranking tidak ditemukan atau bukan channel teks.");
     }
 
-    // Kumpulkan teks dari message ranking (jika ada) + pesan-pesan terbaru sebagai fallback
-    let leaderboardText = "";
-
+    // 1) Coba pesan leaderboard yang pernah tersimpan
+    let entries = [];
     if (rankingMessageId) {
         const msg = await channel.messages.fetch(rankingMessageId).catch(() => null);
-        if (msg) {
-            leaderboardText = [
-                msg.content,
-                ...(msg.embeds || []).map(e => e.description || "")
-            ].join("\n");
-        }
+        if (msg) entries = parseLeaderboard(messageText(msg));
     }
 
-    // Jika message spesifik tidak ada / kosong, scan beberapa pesan terakhir
-    if (leaderboardText.trim() === "") {
-        const recent = await channel.messages.fetch({ limit: 30 }).catch(() => null);
-        if (recent) {
-            const parts = [];
-            for (const [, m] of recent) {
-                parts.push(m.content || "");
-                for (const e of m.embeds || []) parts.push(e.description || "");
-            }
-            leaderboardText = parts.join("\n");
-        }
-    }
-
-    const entries = parseLeaderboard(leaderboardText);
+    // 2) Fallback: scan sampai 100 pesan terakhir, cari yang berisi leaderboard
     if (entries.length === 0) {
-        throw new Error("Tidak menemukan data leaderboard di channel ranking.");
+        const recent = await channel.messages.fetch({ limit: 100 }).catch(() => null);
+        if (recent) {
+            for (const [, m] of recent) {
+                const found = parseLeaderboard(messageText(m));
+                if (found.length > 0) {
+                    entries = found;
+                    setRankingMessage(m.id); // pin agar sync berikutnya langsung ketemu
+                    break;
+                }
+            }
+        }
     }
 
-    // Ganti data lokal mengikuti leaderboard (pertahankan totalDone tertinggi)
+    if (entries.length === 0) {
+        throw new Error("Tidak menemukan leaderboard di channel ranking. Jalankan /ranking dulu untuk membuatnya.");
+    }
+
+    // REPLACE totalDone mengikuti leaderboard (sesuai sumber kebenaran di channel)
     let updated = 0;
     for (const { userId, totalDone } of entries) {
         const existing = handlers.get(userId);
-        const keptTotal = existing
-            ? Math.max(Number(existing.totalDone) || 0, totalDone)
-            : totalDone;
-
         handlers.set(userId, {
             maxJob: existing ? existing.maxJob : 0,
             currentJob: 0,
             jobs: [],
             services: existing ? existing.services : [],
-            totalDone: keptTotal
+            totalDone
         });
         updated++;
     }
-
     saveData();
-    console.log(`🔄 Sync dari channel ranking: ${updated} handler diupdate.`);
+    console.log(`🔄 Sync dari channel ranking: ${updated} handler di-replace.`);
+
+    // 3) Refresh embed leaderboard di channel agar mengikuti data terbaru
+    await updateLeaderboardEmbed(guild);
+
     return { updated, entries };
 }
 

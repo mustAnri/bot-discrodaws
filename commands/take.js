@@ -7,10 +7,8 @@ module.exports = {
     description: "Take Job",
 
     async execute(interaction) {
-
-        await interaction.deferReply(); // biar gak timeout
-
         try {
+            await interaction.deferReply(); // biar gak timeout (di dalam try agar error tetap terbalas)
 
             if (!interaction.guild) {
                 return interaction.editReply({
@@ -101,9 +99,11 @@ Your service has been successfully received. Once it is complete, the handler wi
             const logChannel = await interaction.guild.channels.fetch(logChannelId).catch(() => null);
 
             if (logChannel && logChannel.isTextBased()) {
-                logChannel.send({ embeds: [embed] })
+                await logChannel.send({ embeds: [embed] })
                     .then(() => console.log("✅ Log channel sent."))
-                    .catch(err => console.log("❌ Failed to send log:", err));
+                    .catch(err => console.error("❌ Failed to send /take log (cek permission bot di channel):", err));
+            } else {
+                console.warn(`⚠️ Take log channel tidak ditemukan: ${logChannelId} (cek Take Log Channel ID di admin panel)`);
             }
 
             // ================= BALAS KE USER =================
@@ -112,10 +112,14 @@ Your service has been successfully received. Once it is complete, the handler wi
         } catch (error) {
             console.error("❌ TAKE ERROR:", error);
 
-            if (interaction.deferred) {
-                await interaction.editReply({
-                    content: "❌ System error occurred."
-                });
+            try {
+                if (interaction.deferred || interaction.replied) {
+                    await interaction.editReply({ content: "❌ System error occurred." });
+                } else {
+                    await interaction.reply({ content: "❌ System error occurred." });
+                }
+            } catch (replyErr) {
+                console.error("❌ Gagal kirim balasan error /take:", replyErr);
             }
         }
     }
