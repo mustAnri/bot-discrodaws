@@ -13,6 +13,9 @@ npm-debug.log*
 # Data kadaluarsa (data aktif ada di Data/handlerData.json)
 /handlerData.json
 
+# Config runtime (dibuat otomatis dari default di Data/config.js)
+Data/config.json
+
 # Local tooling
 .claude/
 

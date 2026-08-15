@@ -79,6 +79,9 @@ process.on("uncaughtException", (err) => {
     console.error("⚠️ Uncaught exception:", err);
 });
 
+// ================= ADMIN PANEL =================
+const { startAdminServer } = require("./admin/server");
+
 // ================= LOGIN =================
 if (!process.env.TOKEN) {
     console.error("❌ TOKEN tidak ditemukan. Set environment variable TOKEN terlebih dahulu.");
@@ -86,5 +89,8 @@ if (!process.env.TOKEN) {
 }
 
 client.login(process.env.TOKEN)
-    .then(() => console.log("🔑 Bot berhasil login."))
+    .then(() => {
+        console.log("🔑 Bot berhasil login.");
+        startAdminServer();
+    })
     .catch(err => console.error("❌ Gagal login bot:", err));

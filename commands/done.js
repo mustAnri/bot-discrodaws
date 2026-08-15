@@ -1,7 +1,6 @@
 const { EmbedBuilder } = require("discord.js");
-const handler = require("../Data/handlerData"); 
-const fs = require("fs");
-const path = require("path");
+const handler = require("../Data/handlerData");
+const config = require("../Data/config");
 
 module.exports = {
     name: "done",
@@ -15,7 +14,7 @@ module.exports = {
                 return interaction.editReply({ content: "❌ Command can only be used in a server." });
 
             // ================= CEK ROLE HANDLER =================
-            const handlerRoleId = "1434214694503055552";
+            const handlerRoleId = config.getConfig().handlerRoleId;
             if (!interaction.member.roles.cache.has(handlerRoleId)) {
                 return interaction.editReply({
                     content: "❌ You Failed To Join Because You Are Not A Genuine Handler."
@@ -96,7 +95,7 @@ Service 100% Completed Successfully.`
                 .setTimestamp();
 
             // ================= LOG CHANNEL =================
-            const doneLogChannelId = "1472619337893282033";
+            const doneLogChannelId = config.getConfig().doneLogChannelId;
             const logChannel = await interaction.guild.channels.fetch(doneLogChannelId).catch(() => null);
             if (logChannel?.isTextBased()) {
                 logChannel.send({ embeds: [embed] })

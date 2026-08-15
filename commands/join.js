@@ -1,5 +1,6 @@
 const { EmbedBuilder } = require("discord.js");
 const handler = require("../Data/handlerData"); // pastikan pakai handlerData.js
+const config = require("../Data/config");
 
 module.exports = {
     name: "join",
@@ -15,7 +16,7 @@ module.exports = {
                 });
             }
 
-            const roleId = "1434214694503055552"; // ganti dengan role handler mu
+            const roleId = config.getConfig().handlerRoleId; // diatur via admin panel
 
             if (!interaction.member.roles.cache.has(roleId)) {
                 return interaction.editReply({

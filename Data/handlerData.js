@@ -133,6 +133,74 @@ function removeHandler(userId) {
     return true;
 }
 
+// ================= ADMIN MANAGEMENT =================
+/**
+ * Update data handler dari admin panel (maxJob, totalDone, services).
+ * Tidak mengubah jobs aktif.
+ * @param {string} userId
+ * @param {{maxJob?: number, totalDone?: number, services?: string[]}} partial
+ * @returns {object|null} data terbaru
+ * @throws {Error} jika handler tidak ditemukan / nilai tidak valid
+ */
+function updateHandler(userId, partial) {
+    const data = handlers.get(userId);
+    if (!data) throw new Error("Handler tidak ditemukan.");
+
+    if (partial.maxJob !== undefined) {
+        const maxJob = Number(partial.maxJob);
+        if (!Number.isInteger(maxJob) || maxJob < 0 || maxJob > 5) {
+            throw new Error("maxJob harus angka 0-5.");
+        }
+        data.maxJob = maxJob;
+    }
+
+    if (partial.totalDone !== undefined) {
+        const totalDone = Number(partial.totalDone);
+        if (!Number.isInteger(totalDone) || totalDone < 0) {
+            throw new Error("totalDone harus angka >= 0.");
+        }
+        data.totalDone = totalDone;
+    }
+
+    if (partial.services !== undefined) {
+        if (!Array.isArray(partial.services)) throw new Error("services harus array.");
+        data.services = partial.services
+            .map(s => String(s).trim())
+            .filter(s => s.length > 0)
+            .slice(0, 20);
+    }
+
+    saveData();
+    return getHandler(userId);
+}
+
+/**
+ * Reset job aktif handler (jobs & currentJob), simpan maxJob/services/totalDone.
+ * @param {string} userId
+ * @returns {boolean}
+ */
+function resetHandler(userId) {
+    const data = handlers.get(userId);
+    if (!data) return false;
+
+    data.jobs = [];
+    data.currentJob = 0;
+    saveData();
+    return true;
+}
+
+/**
+ * Hapus handler sepenuhnya dari data (admin).
+ * @param {string} userId
+ * @returns {boolean}
+ */
+function deleteHandler(userId) {
+    if (!handlers.has(userId)) return false;
+    handlers.delete(userId);
+    saveData();
+    return true;
+}
+
 function addService(userId, serviceName) {
     const data = handlers.get(userId);
     if (!data) return false;
@@ -251,5 +319,8 @@ module.exports = {
     getRankingChannel,
     setRankingMessage,
     getRankingMessage,
-    updateLeaderboardEmbed
+    updateLeaderboardEmbed,
+    updateHandler,
+    resetHandler,
+    deleteHandler
 };

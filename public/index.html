@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bot Barokah — Admin Panel</title>
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+    <!-- ================= LOGIN VIEW ================= -->
+    <div id="login-view" class="login-wrap hidden">
+        <form id="login-form" class="login-card">
+            <div class="login-logo">🤖</div>
+            <h1>Bot Barokah</h1>
+            <p class="login-subtitle">Admin Panel</p>
+            <label for="password">Password Admin</label>
+            <input type="password" id="password" placeholder="••••••••" autocomplete="current-password" required>
+            <button type="submit" id="login-btn">Masuk</button>
+            <p id="login-error" class="error-msg"></p>
+        </form>
+    </div>
+
+    <!-- ================= DASHBOARD VIEW ================= -->
+    <div id="dashboard-view" class="hidden">
+        <header class="topbar">
+            <div class="topbar-brand">
+                <span class="topbar-logo">🤖</span>
+                <span class="topbar-title">Bot Barokah <em>Admin</em></span>
+            </div>
+            <div class="topbar-actions">
+                <span id="conn-status" class="conn-status"></span>
+                <button id="logout-btn" class="btn btn-ghost">Logout</button>
+            </div>
+        </header>
+
+        <nav class="tabs">
+            <button class="tab active" data-tab="settings">⚙️ Pengaturan</button>
+            <button class="tab" data-tab="handlers">👥 Handlers</button>
+        </nav>
+
+        <main class="content">
+            <!-- ========== TAB: PENGATURAN ========== -->
+            <section id="tab-settings" class="tab-panel">
+                <div class="panel">
+                    <h2>Pengaturan Bot</h2>
+                    <p class="panel-desc">Ubah ID role & channel yang dipakai bot. Semua perubahan langsung tersimpan.</p>
+                    <form id="settings-form" class="settings-form">
+                        <div class="field">
+                            <label for="handlerRoleId">🎭 Handler Role ID</label>
+                            <input type="text" id="handlerRoleId" inputmode="numeric" placeholder="contoh: 1434214694503055552">
+                            <small>Role yang boleh memakai /join, /take, /done</small>
+                        </div>
+                        <div class="field">
+                            <label for="takeLogChannelId">📥 Take Log Channel ID</label>
+                            <input type="text" id="takeLogChannelId" inputmode="numeric" placeholder="contoh: 1472619243005546701">
+                            <small>Channel tempat log /take dikirim</small>
+                        </div>
+                        <div class="field">
+                            <label for="doneLogChannelId">✅ Done Log Channel ID</label>
+                            <input type="text" id="doneLogChannelId" inputmode="numeric" placeholder="contoh: 1472619337893282033">
+                            <small>Channel tempat log /done dikirim</small>
+                        </div>
+                        <div class="field">
+                            <label for="rankingChannelId">🏆 Ranking Channel ID</label>
+                            <input type="text" id="rankingChannelId" inputmode="numeric" placeholder="contoh: 1472669808964276274">
+                            <small>Channel leaderboard (default untuk /ranking)</small>
+                        </div>
+                        <div class="form-actions">
+                            <button type="submit" class="btn btn-primary">💾 Simpan Pengaturan</button>
+                            <button type="button" id="settings-reload" class="btn btn-ghost">↻ Muat Ulang</button>
+                        </div>
+                    </form>
+                    <p id="settings-status" class="status-msg"></p>
+                </div>
+            </section>
+
+            <!-- ========== TAB: HANDLERS ========== -->
+            <section id="tab-handlers" class="tab-panel hidden">
+                <div class="panel">
+                    <div class="panel-head">
+                        <div>
+                            <h2>Data Handlers</h2>
+                            <p class="panel-desc">Kelola handler: edit statistik, reset job, atau hapus.</p>
+                        </div>
+                        <button id="handlers-reload" class="btn btn-ghost">↻ Refresh</button>
+                    </div>
+                    <div id="handlers-list" class="handlers-list"></div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- ================= EDIT HANDLER MODAL ================= -->
+    <div id="edit-modal" class="modal hidden">
+        <div class="modal-card">
+            <h3>Edit Handler <span id="edit-user-id"></span></h3>
+            <form id="edit-form">
+                <div class="field">
+                    <label for="edit-maxJob">Max Job (0–5)</label>
+                    <input type="number" id="edit-maxJob" min="0" max="5" step="1" required>
+                </div>
+                <div class="field">
+                    <label for="edit-totalDone">Total Done</label>
+                    <input type="number" id="edit-totalDone" min="0" step="1" required>
+                </div>
+                <div class="field">
+                    <label for="edit-services">Services (pisahkan dengan koma)</label>
+                    <input type="text" id="edit-services" placeholder="PTHT, PNB">
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">Simpan</button>
+                    <button type="button" id="edit-cancel" class="btn btn-ghost">Batal</button>
+                </div>
+            </form>
+            <p id="edit-error" class="error-msg"></p>
+        </div>
+    </div>
+
+    <div id="toast" class="toast hidden"></div>
+
+    <script src="/app.js"></script>
+</body>
+</html>

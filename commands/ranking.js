@@ -1,5 +1,6 @@
 const { EmbedBuilder } = require("discord.js");
 const handler = require("../Data/handlerData");
+const config = require("../Data/config");
 
 module.exports = {
     name: "ranking",
@@ -16,13 +17,14 @@ module.exports = {
             }
 
             // ================= LEADERBOARD CHANNEL =================
+            // Prioritas: channel tersimpan > config admin panel
             let channelId = handler.getRankingChannel ? handler.getRankingChannel() : null;
             if (!channelId) {
-                channelId = "1472669808964276274"; // default channel
+                channelId = config.getConfig().rankingChannelId;
                 if (handler.setRankingChannel) handler.setRankingChannel(channelId);
             }
 
-            const logChannel = interaction.guild.channels.cache.get(channelId);
+            const logChannel = await interaction.guild.channels.fetch(channelId).catch(() => null);
             if (!logChannel || !logChannel.isTextBased()) {
                 return interaction.editReply({
                     content: "❌ Channel leaderboard not found."

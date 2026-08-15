@@ -1,5 +1,6 @@
 const { EmbedBuilder } = require("discord.js");
 const handler = require("../Data/handlerData"); // pakai handlerData JSON
+const config = require("../Data/config");
 
 module.exports = {
     name: "take",
@@ -18,7 +19,7 @@ module.exports = {
             }
 
             // ================= CEK ROLE HANDLER =================
-            const handlerRoleId = "1434214694503055552";
+            const handlerRoleId = config.getConfig().handlerRoleId;
             if (!interaction.member.roles.cache.has(handlerRoleId)) {
                 return interaction.editReply({
                     content: "❌ You Failed To Join Because You Are Not A Genuine Handler."
@@ -96,8 +97,8 @@ Your service has been successfully received. Once it is complete, the handler wi
                 .setTimestamp();
 
             // ================= KIRIM KE CHANNEL LOG =================
-            const logChannelId = "1472619243005546701";
-            const logChannel = interaction.guild.channels.cache.get(logChannelId);
+            const logChannelId = config.getConfig().takeLogChannelId;
+            const logChannel = await interaction.guild.channels.fetch(logChannelId).catch(() => null);
 
             if (logChannel && logChannel.isTextBased()) {
                 logChannel.send({ embeds: [embed] })
