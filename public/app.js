@@ -57,7 +57,8 @@
         acEditCancel: document.getElementById("ac-edit-cancel"),
         acEditError: document.getElementById("ac-edit-error"),
         acLogConsole: document.getElementById("ac-log-console"),
-        acClearLogsBtn: document.getElementById("ac-clear-logs-btn")
+        acClearLogsBtn: document.getElementById("ac-clear-logs-btn"),
+        appVersion: document.getElementById("app-version")
     };
 
     let editingUserId = null;
@@ -939,8 +940,27 @@
         }
     });
 
+    // ---- Versi app + commit git (badge topbar) ----
+    async function loadVersion() {
+        try {
+            const { data } = await api("/api/version");
+            let label = `v${data.version}`;
+            if (data.git && data.git.commit) label += ` · ${data.git.commit}`;
+            if (el.appVersion) {
+                el.appVersion.textContent = label;
+                const title = [];
+                if (data.git && data.git.branch) title.push(`branch: ${data.git.branch}`);
+                if (data.git && data.git.committedAt) title.push(`commit: ${data.git.committedAt}`);
+                el.appVersion.title = title.join("\n");
+            }
+        } catch (err) {
+            // Tidak kritis — biarkan badge default.
+        }
+    }
+
     // ================= INIT =================
     function initDashboard() {
+        loadVersion();
         loadSettings();
         loadHandlers();
     }

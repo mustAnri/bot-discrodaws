@@ -31,6 +31,36 @@ let discordClient = null; // di-set saat startAdminServer(client)
 
 const COOLDOWN_MS = 30000; // 30 detik antar aksi speed/clear-memory
 
+// ================= BUILD INFO =================
+// Versi app dari package.json + info commit git (untuk badge di web UI).
+// Di environment deploy tanpa folder .git, fallback ke env Railway.
+const pkg = require("../package.json");
+const { execSync } = require("child_process");
+
+function readGitInfo() {
+    const git = { commit: null, branch: null, committedAt: null };
+    const repoRoot = path.join(__dirname, "..");
+    try {
+        const opts = { cwd: repoRoot, stdio: ["ignore", "pipe", "ignore"], timeout: 3000 };
+        git.commit = execSync("git rev-parse --short HEAD", opts).toString().trim();
+        git.branch = execSync("git rev-parse --abbrev-ref HEAD", opts).toString().trim();
+        git.committedAt = execSync("git log -1 --format=%ci", opts).toString().trim();
+    } catch (err) {
+        // Repo tanpa .git — dicoba dari env Railway di bawah.
+    }
+    if (!git.commit && process.env.RAILWAY_GIT_COMMIT_SHA) {
+        git.commit = String(process.env.RAILWAY_GIT_COMMIT_SHA).slice(0, 7);
+        git.branch = process.env.RAILWAY_GIT_BRANCH || null;
+    }
+    return git;
+}
+
+const BUILD_INFO = Object.freeze({
+    name: pkg.name || "bot-barokah",
+    version: pkg.version || "0.0.0",
+    git: Object.freeze(readGitInfo())
+});
+
 // ================= UTIL =================
 function timingSafeEqual(a, b) {
     const bufA = Buffer.from(String(a), "utf8");
@@ -134,6 +164,11 @@ app.get("/api/auth/me", (req, res) => {
     const expiresAt = token ? sessions.get(token) : undefined;
     const loggedIn = Boolean(expiresAt && expiresAt >= Date.now());
     res.json({ success: true, data: { loggedIn } });
+});
+
+// Info versi app + commit git (untuk badge di topbar web)
+app.get("/api/version", requireAuth, (req, res) => {
+    res.json({ success: true, data: BUILD_INFO });
 });
 
 app.post("/api/login", loginRateLimit, (req, res) => {

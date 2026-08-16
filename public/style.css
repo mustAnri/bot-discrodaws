@@ -827,6 +827,19 @@ body {
     cursor: pointer;
 }
 
+/* Badge versi app + commit git di topbar */
+.app-version {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    color: var(--text-faint);
+    border: 1px solid var(--line-soft);
+    border-radius: var(--radius);
+    padding: 4px 8px;
+    white-space: nowrap;
+    cursor: default;
+}
+
 /* ============================================================
    RESPONSIVE
    ============================================================ */
