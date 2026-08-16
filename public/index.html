@@ -48,6 +48,7 @@
             <button class="tab active" data-tab="settings"><span class="tab-idx">01</span> KONFIGURASI</button>
             <button class="tab" data-tab="handlers"><span class="tab-idx">02</span> HANDLERS</button>
             <button class="tab" data-tab="system"><span class="tab-idx">03</span> SYSTEM</button>
+            <button class="tab" data-tab="autoclick"><span class="tab-idx">04</span> AUTO VERIF</button>
         </nav>
 
         <main class="content">
@@ -180,6 +181,119 @@
                     <div id="log-console" class="log-console" aria-live="polite"></div>
                 </div>
             </section>
+
+            <!-- ========== TAB: AUTO VERIF ========== -->
+            <section id="tab-autoclick" class="tab-panel hidden">
+                <div class="panel">
+                    <header class="panel-head row">
+                        <div>
+                            <div class="panel-kicker">SEC.07 // AUTO VERIF</div>
+                            <h2>Auto Klik Verifikasi</h2>
+                            <p class="panel-desc">Port fitur <code>auto-click.py</code>: tiap akun login memakai token, memantau channel, lalu otomatis klik tombol <code>Authenticate</code> / <code>Yes, Log Me In</code>. Status di-refresh otomatis tiap 3 detik saat tab ini aktif.</p>
+                        </div>
+                        <div class="ac-head-actions">
+                            <button id="ac-start-all" class="btn btn-primary btn-sm">▶ START ALL</button>
+                            <button id="ac-stop-all" class="btn btn-danger btn-sm">⏹ STOP ALL</button>
+                        </div>
+                    </header>
+
+                    <form id="ac-add-form" class="ac-add-form settings-form">
+                        <div class="ac-add-grid">
+                            <div class="field">
+                                <label for="ac-name">NAMA AKUN</label>
+                                <input type="text" id="ac-name" placeholder="contoh: akun-01" autocomplete="off" required>
+                                <small>2-32 karakter: huruf, angka, _ atau -</small>
+                            </div>
+                            <div class="field">
+                                <label for="ac-token">TOKEN DISCORD</label>
+                                <input type="password" id="ac-token" placeholder="token akun user" autocomplete="off" required>
+                                <small>Token akun yang dipakai login (bukan token bot)</small>
+                            </div>
+                            <div class="field">
+                                <label for="ac-channel">CHANNEL ID (opsional)</label>
+                                <input type="text" id="ac-channel" inputmode="numeric" placeholder="default: 1243177096948486186" autocomplete="off">
+                                <small>Channel verifikasi yang dipantau</small>
+                            </div>
+                        </div>
+                        <div class="form-actions">
+                            <button type="submit" class="btn btn-primary">➕ TAMBAH AKUN</button>
+                        </div>
+                    </form>
+                    <p id="ac-add-status" class="status-msg"></p>
+
+                    <div id="ac-accounts" class="handlers-list"></div>
+                </div>
+
+                <div class="panel">
+                    <header class="panel-head">
+                        <div class="panel-kicker">SEC.08 // PENGATURAN KLIK</div>
+                        <h2>Delay &amp; Humanisasi</h2>
+                        <p class="panel-desc">Perubahan langsung diterapkan ke worker yang sedang running (live) dan tersimpan permanen.</p>
+                    </header>
+                    <form id="ac-config-form" class="settings-form">
+                        <div class="ac-add-grid">
+                            <div class="field">
+                                <label for="ac-base_delay">BASE DELAY (detik)</label>
+                                <input type="number" id="ac-base_delay" min="0" step="0.1">
+                                <small>Delay dasar antar klik</small>
+                            </div>
+                            <div class="field">
+                                <label for="ac-min_delay">MIN DELAY (detik)</label>
+                                <input type="number" id="ac-min_delay" min="0" step="0.1">
+                            </div>
+                            <div class="field">
+                                <label for="ac-max_delay">MAX DELAY (detik)</label>
+                                <input type="number" id="ac-max_delay" min="0" step="0.1">
+                            </div>
+                            <div class="field">
+                                <label for="ac-human_delay_min">HUMAN DELAY MIN (detik)</label>
+                                <input type="number" id="ac-human_delay_min" min="0" step="0.05">
+                            </div>
+                            <div class="field">
+                                <label for="ac-human_delay_max">HUMAN DELAY MAX (detik)</label>
+                                <input type="number" id="ac-human_delay_max" min="0" step="0.05">
+                            </div>
+                            <div class="field">
+                                <label for="ac-max_click_retries">MAX CLICK RETRIES</label>
+                                <input type="number" id="ac-max_click_retries" min="1" step="1">
+                            </div>
+                            <div class="field">
+                                <label for="ac-heartbeat_timeout">HEARTBEAT TIMEOUT (detik)</label>
+                                <input type="number" id="ac-heartbeat_timeout" min="30" step="1">
+                                <small>Paksa reconnect jika gateway tidak ACK</small>
+                            </div>
+                            <div class="field">
+                                <label for="ac-confirm_watchdog_timeout">CONFIRM WATCHDOG (detik)</label>
+                                <input type="number" id="ac-confirm_watchdog_timeout" min="10" step="1">
+                                <small>Re-fetch jika tombol confirm tidak muncul</small>
+                            </div>
+                        </div>
+                        <div class="field field-check">
+                            <label class="check-label" for="ac-humanize">
+                                <input type="checkbox" id="ac-humanize">
+                                <span>HUMANIZE — tambah delay acak seperti manusia</span>
+                            </label>
+                        </div>
+                        <div class="form-actions">
+                            <button type="submit" class="btn btn-primary">SIMPAN PENGATURAN</button>
+                            <button type="button" id="ac-config-reload" class="btn btn-ghost">↻ MUAT ULANG</button>
+                        </div>
+                    </form>
+                    <p id="ac-config-status" class="status-msg"></p>
+                </div>
+
+                <div class="panel">
+                    <header class="panel-head row">
+                        <div>
+                            <div class="panel-kicker">SEC.09 // LOG AUTO VERIF</div>
+                            <h2>Live Log Auto Verif</h2>
+                            <p class="panel-desc">Log khusus worker auto verif — terpisah dari log server di tab SYSTEM. 400 baris terakhir, live (auto-scroll).</p>
+                        </div>
+                        <button id="ac-clear-logs-btn" class="btn btn-danger btn-sm">🗑 CLEAR LOG</button>
+                    </header>
+                    <div id="ac-log-console" class="log-console" aria-live="polite"></div>
+                </div>
+            </section>
         </main>
     </div>
 
@@ -207,6 +321,31 @@
                 </div>
             </form>
             <p id="edit-error" class="error-msg"></p>
+        </div>
+    </div>
+
+    <!-- ================= MODAL EDIT AKUN AUTO VERIF ================= -->
+    <div id="ac-edit-modal" class="modal hidden">
+        <div class="modal-card">
+            <div class="panel-kicker">EDIT ACCOUNT</div>
+            <h3>AKUN <span id="ac-edit-name"></span></h3>
+            <form id="ac-edit-form">
+                <div class="field">
+                    <label for="ac-edit-token">TOKEN BARU (kosongkan jika tidak diubah)</label>
+                    <input type="password" id="ac-edit-token" placeholder="••••••••••••" autocomplete="off">
+                    <small>Mengganti token akan menghentikan worker yang running</small>
+                </div>
+                <div class="field">
+                    <label for="ac-edit-channel">CHANNEL ID</label>
+                    <input type="text" id="ac-edit-channel" inputmode="numeric" autocomplete="off">
+                    <small>Channel verifikasi yang dipantau</small>
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">SIMPAN</button>
+                    <button type="button" id="ac-edit-cancel" class="btn btn-ghost">BATAL</button>
+                </div>
+            </form>
+            <p id="ac-edit-error" class="error-msg"></p>
         </div>
     </div>
 

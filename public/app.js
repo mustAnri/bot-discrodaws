@@ -36,7 +36,28 @@
         clearMemBtn: document.getElementById("clear-mem-btn"),
         speedBtn: document.getElementById("speed-btn"),
         clearLogsBtn: document.getElementById("clear-logs-btn"),
-        logConsole: document.getElementById("log-console")
+        logConsole: document.getElementById("log-console"),
+        acAccounts: document.getElementById("ac-accounts"),
+        acAddForm: document.getElementById("ac-add-form"),
+        acName: document.getElementById("ac-name"),
+        acToken: document.getElementById("ac-token"),
+        acChannel: document.getElementById("ac-channel"),
+        acAddStatus: document.getElementById("ac-add-status"),
+        acStartAll: document.getElementById("ac-start-all"),
+        acStopAll: document.getElementById("ac-stop-all"),
+        acConfigForm: document.getElementById("ac-config-form"),
+        acConfigReload: document.getElementById("ac-config-reload"),
+        acConfigStatus: document.getElementById("ac-config-status"),
+        acHumanize: document.getElementById("ac-humanize"),
+        acEditModal: document.getElementById("ac-edit-modal"),
+        acEditForm: document.getElementById("ac-edit-form"),
+        acEditName: document.getElementById("ac-edit-name"),
+        acEditToken: document.getElementById("ac-edit-token"),
+        acEditChannel: document.getElementById("ac-edit-channel"),
+        acEditCancel: document.getElementById("ac-edit-cancel"),
+        acEditError: document.getElementById("ac-edit-error"),
+        acLogConsole: document.getElementById("ac-log-console"),
+        acClearLogsBtn: document.getElementById("ac-clear-logs-btn")
     };
 
     let editingUserId = null;
@@ -45,6 +66,10 @@
     let logPollTimer = null;
     let lastLogTs = null;
     let activeTab = "settings";
+    let acPollTimer = null;
+    let acEditingName = null;
+    let acLogPollTimer = null;
+    let lastAcLogTs = null;
 
     // ================= UTIL =================
     async function api(path, options = {}) {
@@ -125,6 +150,7 @@
             document.getElementById("tab-settings").classList.toggle("hidden", target !== "settings");
             document.getElementById("tab-handlers").classList.toggle("hidden", target !== "handlers");
             document.getElementById("tab-system").classList.toggle("hidden", target !== "system");
+            document.getElementById("tab-autoclick").classList.toggle("hidden", target !== "autoclick");
             onTabSwitch(target);
         });
     });
@@ -444,7 +470,7 @@
     }
 
     // ---- Logs ----
-    function appendLogLines(lines) {
+    function appendLogLines(lines, target = el.logConsole) {
         if (lines.length === 0) return;
         const frag = document.createDocumentFragment();
         for (const line of lines) {
@@ -467,13 +493,13 @@
             frag.appendChild(div);
         }
 
-        const isAtBottom = el.logConsole.scrollHeight - el.logConsole.scrollTop - el.logConsole.clientHeight < 60;
-        el.logConsole.appendChild(frag);
+        const isAtBottom = target.scrollHeight - target.scrollTop - target.clientHeight < 60;
+        target.appendChild(frag);
 
-        while (el.logConsole.children.length > MAX_LOG_LINES) {
-            el.logConsole.removeChild(el.logConsole.firstChild);
+        while (target.children.length > MAX_LOG_LINES) {
+            target.removeChild(target.firstChild);
         }
-        if (isAtBottom) el.logConsole.scrollTop = el.logConsole.scrollHeight;
+        if (isAtBottom) target.scrollTop = target.scrollHeight;
     }
 
     async function pollLogs(full = false) {
@@ -583,7 +609,335 @@
             sysPollTimer = null;
             logPollTimer = null;
         }
+
+        // ---- Polling lifecycle: AUTO VERIF ----
+        if (tab === "autoclick") {
+            loadAutoClickStatus();
+            loadAcConfig();
+            pollAcLogs(true);
+            acPollTimer = setInterval(loadAutoClickStatus, AC_POLL_MS);
+            acLogPollTimer = setInterval(() => pollAcLogs(false), AC_LOG_POLL_MS);
+        } else {
+            clearInterval(acPollTimer);
+            acPollTimer = null;
+            clearInterval(acLogPollTimer);
+            acLogPollTimer = null;
+        }
     }
+
+    // ================= AUTO VERIF (AUTO-CLICK) =================
+    const AC_POLL_MS = 3000;
+    const AC_CONFIG_FIELDS = [
+        "base_delay", "min_delay", "max_delay",
+        "human_delay_min", "human_delay_max",
+        "max_click_retries", "heartbeat_timeout", "confirm_watchdog_timeout"
+    ];
+
+    // Badge berdasarkan string status worker dari backend
+    const AC_STATUS_BADGES = {
+        "🟢 Running":           { rail: "w-running",  cls: "s-ready",   label: "RUNNING" },
+        "🟡 Starting":          { rail: "w-starting", cls: "s-partial", label: "STARTING" },
+        "🔄 Authenticating...": { rail: "w-running",  cls: "s-partial", label: "AUTHENTICATING" },
+        "✅ Logged In":         { rail: "w-running",  cls: "s-ready",   label: "LOGGED IN" },
+        "❌ Token Invalid":     { rail: "w-error",    cls: "s-full",    label: "TOKEN INVALID" },
+        "🔴 Stopped":           { rail: "w-stopped",  cls: "s-stop",    label: "STOPPED" }
+    };
+
+    function acStatusBadge(status) {
+        return AC_STATUS_BADGES[status] || { rail: "w-stopped", cls: "s-stop", label: status || "UNKNOWN" };
+    }
+
+    function setAcAddStatus(message, type = "") {
+        el.acAddStatus.textContent = message;
+        el.acAddStatus.className = `status-msg ${type}`;
+    }
+
+    function setAcConfigStatus(message, type = "") {
+        el.acConfigStatus.textContent = message;
+        el.acConfigStatus.className = `status-msg ${type}`;
+    }
+
+    // Format uptime singkat: 2j 5m / 12m 3d / 45d
+    function formatAcUptime(totalSec) {
+        if (!totalSec || totalSec <= 0) return "—";
+        const h = Math.floor(totalSec / 3600);
+        const m = Math.floor((totalSec % 3600) / 60);
+        const d = Math.floor(totalSec % 60);
+        if (h > 0) return `${h}j ${m}m`;
+        if (m > 0) return `${m}m ${d}d`;
+        return `${d}d`;
+    }
+
+    function renderAcAccounts(accounts) {
+        if (!accounts || accounts.length === 0) {
+            el.acAccounts.innerHTML = `<div class="empty-state">— BELUM ADA AKUN AUTO VERIF —</div>`;
+            return;
+        }
+
+        el.acAccounts.innerHTML = accounts.map((acc, index) => {
+            const meta = acStatusBadge(acc.status);
+            const stats = acc.stats || {};
+
+            const statBlocks = `
+                <div class="stat">
+                    <span class="stat-label">UPTIME</span>
+                    <span class="stat-value">${formatAcUptime(stats.uptimeSec)}</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">MESSAGES</span>
+                    <span class="stat-value">${stats.messageCount ?? 0}</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">CLICKS</span>
+                    <span class="stat-value accent">${stats.clickCount ?? 0}</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">ERRORS</span>
+                    <span class="stat-value">${stats.errorCount ?? 0}</span>
+                </div>`;
+
+            const logLines = (acc.logs || []).map(line =>
+                `<div class="ac-log-line">${escapeHtml(line)}</div>`
+            ).join("");
+
+            const startStopBtn = acc.running
+                ? `<button class="btn btn-ghost btn-sm" data-action="ac-stop" data-id="${escapeHtml(acc.name)}">⏹ STOP</button>`
+                : `<button class="btn btn-primary btn-sm" data-action="ac-start" data-id="${escapeHtml(acc.name)}">▶ START</button>`;
+
+            return `
+            <div class="ac-card ${meta.rail}" style="animation-delay:${index * 0.05}s">
+                <div class="ac-info">
+                    <div class="ac-title">
+                        ${escapeHtml(acc.name)}
+                        <span class="slot ${meta.cls}">${escapeHtml(meta.label)}</span>
+                    </div>
+                    <div class="ac-meta">
+                        <span>TOKEN ${escapeHtml(acc.tokenMasked || "********")}</span>
+                        <span>CHANNEL ${escapeHtml(acc.channelId || "-")}</span>
+                    </div>
+                    <div class="handler-stats">${statBlocks}</div>
+                    ${logLines ? `<div class="ac-logs">${logLines}</div>` : ""}
+                </div>
+                <div class="handler-actions">
+                    ${startStopBtn}
+                    <button class="btn btn-ghost btn-sm" data-action="ac-edit" data-id="${escapeHtml(acc.name)}">EDIT</button>
+                    <button class="btn btn-danger btn-sm" data-action="ac-delete" data-id="${escapeHtml(acc.name)}">HAPUS</button>
+                </div>
+            </div>`;
+        }).join("");
+    }
+
+    async function loadAutoClickStatus() {
+        try {
+            const { data } = await api("/api/autoclick/status");
+            renderAcAccounts(data.accounts || []);
+        } catch (err) {
+            if (err.status === 401) return showView("login");
+            el.acAccounts.innerHTML = `<div class="empty-state">Gagal memuat: ${escapeHtml(err.message)}</div>`;
+        }
+    }
+
+    // ---- Tambah akun ----
+    el.acAddForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const payload = {
+            name: el.acName.value.trim(),
+            token: el.acToken.value.trim(),
+            channelId: el.acChannel.value.trim()
+        };
+        try {
+            await api("/api/autoclick/accounts", { method: "POST", body: JSON.stringify(payload) });
+            el.acName.value = "";
+            el.acToken.value = "";
+            el.acChannel.value = "";
+            setAcAddStatus("✅ Akun ditambahkan.", "ok");
+            loadAutoClickStatus();
+        } catch (err) {
+            setAcAddStatus(err.message, "err");
+        }
+    });
+
+    // ---- Start All / Stop All ----
+    el.acStartAll.addEventListener("click", async () => {
+        if (!confirm("Start semua akun auto verif?")) return;
+        try {
+            const { data } = await api("/api/autoclick/start-all", { method: "POST" });
+            showToast(`▶ ${data.started} worker dimulai`);
+            loadAutoClickStatus();
+        } catch (err) {
+            showToast(err.message, "err");
+        }
+    });
+
+    el.acStopAll.addEventListener("click", async () => {
+        if (!confirm("Stop semua akun auto verif?")) return;
+        try {
+            const { data } = await api("/api/autoclick/stop-all", { method: "POST" });
+            showToast(`⏹ ${data.stopped} worker dihentikan`);
+            loadAutoClickStatus();
+        } catch (err) {
+            showToast(err.message, "err");
+        }
+    });
+
+    // ---- Aksi per akun (start / stop / edit / delete) ----
+    el.acAccounts.addEventListener("click", async (e) => {
+        const btn = e.target.closest("button[data-action]");
+        if (!btn) return;
+
+        const { action, id } = btn.dataset;
+        const encodedId = encodeURIComponent(id);
+
+        if (action === "ac-start") {
+            try {
+                await api(`/api/autoclick/accounts/${encodedId}/start`, { method: "POST" });
+                showToast(`▶ Worker "${id}" dimulai`);
+                setTimeout(loadAutoClickStatus, 800);
+            } catch (err) {
+                showToast(err.message, "err");
+            }
+            return;
+        }
+
+        if (action === "ac-stop") {
+            try {
+                await api(`/api/autoclick/accounts/${encodedId}/stop`, { method: "POST" });
+                showToast(`⏹ Worker "${id}" dihentikan`);
+                loadAutoClickStatus();
+            } catch (err) {
+                showToast(err.message, "err");
+            }
+            return;
+        }
+
+        if (action === "ac-edit") {
+            openAcEditModal(id);
+            return;
+        }
+
+        if (action === "ac-delete") {
+            if (!confirm(`Hapus akun "${id}" sepenuhnya? Token ikut terhapus.`)) return;
+            try {
+                await api(`/api/autoclick/accounts/${encodedId}`, { method: "DELETE" });
+                showToast(`Akun "${id}" dihapus`);
+                loadAutoClickStatus();
+            } catch (err) {
+                showToast(err.message, "err");
+            }
+        }
+    });
+
+    // ---- Edit modal (ganti token / channel) ----
+    async function openAcEditModal(name) {
+        try {
+            const { data } = await api("/api/autoclick/status");
+            const acc = (data.accounts || []).find(a => a.name === name);
+            if (!acc) throw new Error(`Akun "${name}" tidak ditemukan.`);
+
+            acEditingName = name;
+            el.acEditName.textContent = name;
+            el.acEditToken.value = "";
+            el.acEditChannel.value = acc.channelId || "";
+            el.acEditError.textContent = "";
+            el.acEditModal.classList.remove("hidden");
+        } catch (err) {
+            showToast(err.message, "err");
+        }
+    }
+
+    function closeAcEditModal() {
+        acEditingName = null;
+        el.acEditModal.classList.add("hidden");
+    }
+
+    el.acEditForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        if (!acEditingName) return;
+
+        const payload = { channelId: el.acEditChannel.value.trim() };
+        const newToken = el.acEditToken.value.trim();
+        if (newToken) payload.token = newToken;
+
+        try {
+            await api(`/api/autoclick/accounts/${encodeURIComponent(acEditingName)}`, {
+                method: "PUT",
+                body: JSON.stringify(payload)
+            });
+            closeAcEditModal();
+            showToast("Akun diperbarui");
+            loadAutoClickStatus();
+        } catch (err) {
+            el.acEditError.textContent = err.message;
+        }
+    });
+
+    el.acEditCancel.addEventListener("click", closeAcEditModal);
+    el.acEditModal.addEventListener("click", (e) => {
+        if (e.target === el.acEditModal) closeAcEditModal();
+    });
+
+    // ---- Pengaturan klik (delay & humanisasi) ----
+    async function loadAcConfig() {
+        try {
+            const { data } = await api("/api/autoclick/config");
+            for (const field of AC_CONFIG_FIELDS) {
+                const input = document.getElementById(`ac-${field}`);
+                if (input && data[field] !== undefined && data[field] !== null) {
+                    input.value = data[field];
+                }
+            }
+            el.acHumanize.checked = !!data.humanize;
+        } catch (err) {
+            if (err.status === 401) return showView("login");
+            setAcConfigStatus(`Gagal memuat: ${err.message}`, "err");
+        }
+    }
+
+    el.acConfigForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const payload = { humanize: el.acHumanize.checked };
+        for (const field of AC_CONFIG_FIELDS) {
+            const input = document.getElementById(`ac-${field}`);
+            if (input && input.value.trim() !== "") {
+                payload[field] = Number(input.value);
+            }
+        }
+        try {
+            await api("/api/autoclick/config", { method: "PUT", body: JSON.stringify(payload) });
+            setAcConfigStatus("✅ Pengaturan disimpan & diterapkan ke worker running.", "ok");
+        } catch (err) {
+            setAcConfigStatus(err.message, "err");
+        }
+    });
+
+    el.acConfigReload.addEventListener("click", loadAcConfig);
+
+    // ---- Log khusus auto verif (live) ----
+    const AC_LOG_POLL_MS = 2500;
+
+    async function pollAcLogs(full = false) {
+        try {
+            const query = (!full && lastAcLogTs) ? `?after=${encodeURIComponent(lastAcLogTs)}` : "";
+            const { data } = await api(`/api/autoclick/logs${query}`);
+            if (data.length > 0) {
+                appendLogLines(data, el.acLogConsole);
+                lastAcLogTs = data[data.length - 1].ts;
+            }
+        } catch (err) {
+            if (err.status === 401) showView("login");
+        }
+    }
+
+    el.acClearLogsBtn.addEventListener("click", async () => {
+        try {
+            await api("/api/autoclick/logs/clear", { method: "POST" });
+            el.acLogConsole.innerHTML = "";
+            lastAcLogTs = null;
+            showToast("Log auto verif dibersihkan");
+        } catch (err) {
+            showToast(err.message, "err");
+        }
+    });
 
     // ================= INIT =================
     function initDashboard() {

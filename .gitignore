@@ -16,9 +16,18 @@ npm-debug.log*
 # Config runtime (dibuat otomatis dari default di Data/config.js)
 Data/config.json
 
+# Data runtime auto-click (BERISI TOKEN user — JANGAN commit!)
+Data/autoclick-accounts.json
+Data/autoclick-config.json
+admin/autoclick/autoclick-config.json
+
 # Local tooling
 .claude/
 
 # OS files
 .DS_Store
 Thumbs.db
+
+# JCE context index runtime state
+.opencode-jce/
+.opencode-context.md

@@ -7,6 +7,10 @@ const cookieParser = require("cookie-parser");
 
 const handler = require("../Data/handlerData");
 const config = require("../Data/config");
+const autoClickAccounts = require("../Data/autoClickAccounts");
+const autoClickConfig = require("./autoclick/config");
+const autoClickManager = require("./autoclick/manager");
+const autoClickLogStore = require("./autoclick/logStore");
 const logStore = require("./logStore");
 const systemInfo = require("./systemInfo");
 
@@ -171,6 +175,147 @@ app.put("/api/config", requireAuth, (req, res) => {
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
     }
+});
+
+// ================= AUTO VERIF (AUTO-CLICK) ROUTES =================
+// Port fitur auto-click.py — kontrol HANYA via web panel, tanpa command bot.
+// Token akun tidak pernah dikirim penuh ke frontend (selalu di-mask).
+
+// Dashboard akun + status worker (untuk polling UI)
+app.get("/api/autoclick/status", requireAuth, (req, res) => {
+    res.json({ success: true, data: { accounts: autoClickManager.getDashboard() } });
+});
+
+// Daftar akun (alias dari status, supaya semantik REST jelas)
+app.get("/api/autoclick/accounts", requireAuth, (req, res) => {
+    res.json({ success: true, data: { accounts: autoClickManager.getDashboard() } });
+});
+
+// Tambah akun baru
+app.post("/api/autoclick/accounts", requireAuth, (req, res) => {
+    const { name, token, channelId } = req.body || {};
+    const cleanName = String(name || "").trim();
+
+    if (autoClickAccounts.getAccount(cleanName)) {
+        return res.status(409).json({
+            success: false,
+            error: `Akun "${cleanName}" sudah ada. Gunakan EDIT untuk mengubahnya.`
+        });
+    }
+
+    try {
+        const account = autoClickAccounts.addAccount(cleanName, token, channelId);
+        console.log(`🤖 Auto-click: akun "${cleanName}" ditambahkan`);
+        return res.json({
+            success: true,
+            data: {
+                name: cleanName,
+                channelId: account.channel_id,
+                tokenMasked: autoClickAccounts.maskToken(account.token)
+            }
+        });
+    } catch (err) {
+        return res.status(400).json({ success: false, error: err.message });
+    }
+});
+
+// Update akun (token dan/atau channel). Token diganti -> worker dihentikan.
+app.put("/api/autoclick/accounts/:name", requireAuth, async (req, res) => {
+    const name = req.params.name;
+
+    try {
+        const tokenChanged = Boolean(req.body && String(req.body.token || "").trim() !== "");
+        const account = autoClickAccounts.updateAccount(name, req.body || {});
+
+        if (tokenChanged) await autoClickManager.stopWorkerForTokenChange(name);
+        if (req.body && String(req.body.channelId || "").trim() !== "") {
+            autoClickManager.setWorkerChannelLive(name, account.channel_id);
+        }
+
+        console.log(`🤖 Auto-click: akun "${name}" diupdate`);
+        return res.json({
+            success: true,
+            data: {
+                name,
+                channelId: account.channel_id,
+                tokenMasked: autoClickAccounts.maskToken(account.token)
+            }
+        });
+    } catch (err) {
+        const status = err.message.includes("tidak ditemukan") ? 404 : 400;
+        return res.status(status).json({ success: false, error: err.message });
+    }
+});
+
+// Hapus akun (worker dihentikan lebih dulu jika aktif)
+app.delete("/api/autoclick/accounts/:name", requireAuth, async (req, res) => {
+    const name = req.params.name;
+
+    await autoClickManager.stopWorker(name);
+    const ok = autoClickAccounts.removeAccount(name);
+    if (!ok) {
+        return res.status(404).json({ success: false, error: `Akun "${name}" tidak ditemukan.` });
+    }
+
+    console.log(`🤖 Auto-click: akun "${name}" dihapus`);
+    return res.json({ success: true });
+});
+
+// Start/stop worker per akun
+app.post("/api/autoclick/accounts/:name/start", requireAuth, async (req, res) => {
+    try {
+        await autoClickManager.startWorker(req.params.name);
+        return res.json({ success: true });
+    } catch (err) {
+        const status = err.message.includes("tidak ditemukan") ? 404 : 409;
+        return res.status(status).json({ success: false, error: err.message });
+    }
+});
+
+app.post("/api/autoclick/accounts/:name/stop", requireAuth, async (req, res) => {
+    await autoClickManager.stopWorker(req.params.name);
+    return res.json({ success: true });
+});
+
+// Start/stop semua worker
+app.post("/api/autoclick/start-all", requireAuth, async (req, res) => {
+    const started = await autoClickManager.startAll();
+    console.log(`🤖 Auto-click: start all (${started} worker)`);
+    return res.json({ success: true, data: { started } });
+});
+
+app.post("/api/autoclick/stop-all", requireAuth, async (req, res) => {
+    const stopped = await autoClickManager.stopAll();
+    console.log(`🤖 Auto-click: stop all (${stopped} worker)`);
+    return res.json({ success: true, data: { stopped } });
+});
+
+// Config auto-click (delay, humanize, dsb.) — diterapkan live ke worker running
+app.get("/api/autoclick/config", requireAuth, (req, res) => {
+    res.json({ success: true, data: autoClickConfig.getConfig() });
+});
+
+app.put("/api/autoclick/config", requireAuth, (req, res) => {
+    try {
+        const updated = autoClickConfig.updateConfig(req.body || {});
+        autoClickManager.applyConfigToWorkers();
+        return res.json({ success: true, data: updated });
+    } catch (err) {
+        return res.status(400).json({ success: false, error: err.message });
+    }
+});
+
+// Log khusus auto verif (terpisah dari log server umum)
+app.get("/api/autoclick/logs", requireAuth, (req, res) => {
+    const after = typeof req.query.after === "string" && req.query.after.length > 0
+        ? req.query.after
+        : null;
+    res.json({ success: true, data: autoClickLogStore.getLogs(after) });
+});
+
+app.post("/api/autoclick/logs/clear", requireAuth, (req, res) => {
+    autoClickLogStore.clear();
+    res.json({ success: true });
 });
 
 // ================= HANDLER ROUTES =================
