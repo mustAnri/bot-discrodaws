@@ -1,5 +1,6 @@
 const fs = require("fs");
 const path = require("path");
+const crypto = require("crypto");
 
 // ================= LOKASI DATA =================
 // Sama seperti config/handlerData: di Railway set DATA_DIR=/data agar
@@ -13,6 +14,59 @@ const accountsPath = path.join(dataDir, DATA_FILE_NAME);
 const DEFAULT_CHANNEL_ID = "1243177096948486186";
 const NAME_PATTERN = /^[A-Za-z0-9_-]{2,32}$/;
 const DISCORD_ID_PATTERN = /^\d{5,25}$/;
+
+// ================= ENKRIPSI TOKEN =================
+// Hash satu arah TIDAK mungkin: worker butuh token asli untuk login ke Discord.
+// Solusinya: enkripsi at-rest AES-256-GCM. Jika env AC_ENC_KEY diisi, token di
+// file disimpan sebagai "enc:v1:<iv>:<authTag>:<data>" (base64). Jika AC_ENC_KEY
+// tidak diset, perilaku lama (plaintext) dipertahankan agar tidak memecah
+// instalasi yang sudah ada.
+const ENC_PREFIX = "enc:v1:";
+
+function getEncryptionKey() {
+    const raw = (process.env.AC_ENC_KEY || "").trim();
+    if (!raw) return null;
+    return crypto.createHash("sha256").update(raw).digest(); // 32 byte
+}
+
+function isEncryptionEnabled() {
+    return getEncryptionKey() !== null;
+}
+
+function encryptToken(plain) {
+    const key = getEncryptionKey();
+    if (!key) return plain;
+    const iv = crypto.randomBytes(12);
+    const cipher = crypto.createCipheriv("aes-256-gcm", key, iv);
+    const encrypted = Buffer.concat([cipher.update(String(plain), "utf8"), cipher.final()]);
+    const authTag = cipher.getAuthTag();
+    return ENC_PREFIX + [
+        iv.toString("base64"),
+        authTag.toString("base64"),
+        encrypted.toString("base64")
+    ].join(":");
+}
+
+function decryptToken(stored) {
+    if (typeof stored !== "string" || !stored.startsWith(ENC_PREFIX)) return stored;
+    const key = getEncryptionKey();
+    if (!key) {
+        console.error("DECRYPT GAGAL: token tersimpan terenkripsi tapi AC_ENC_KEY belum diset di env.");
+        return "";
+    }
+    try {
+        const [ivB64, tagB64, dataB64] = stored.slice(ENC_PREFIX.length).split(":");
+        const decipher = crypto.createDecipheriv("aes-256-gcm", key, Buffer.from(ivB64, "base64"));
+        decipher.setAuthTag(Buffer.from(tagB64, "base64"));
+        return Buffer.concat([
+            decipher.update(Buffer.from(dataB64, "base64")),
+            decipher.final()
+        ]).toString("utf8");
+    } catch (err) {
+        console.error("DECRYPT TOKEN GAGAL (AC_ENC_KEY salah / data korup?):", err.message);
+        return "";
+    }
+}
 
 /** @type {Record<string, {token: string, channel_id: string}>} */
 let accounts = {};
@@ -41,12 +95,15 @@ function loadAccounts() {
         accounts = {};
         for (const [name, data] of Object.entries(obj)) {
             if (!data || typeof data !== "object") continue;
-            const token = normalizeToken(data.token);
-            if (!token) continue;
+            const storedToken = normalizeToken(data.token);
+            if (!storedToken) continue;
+            const token = decryptToken(storedToken);
             const channelId = DISCORD_ID_PATTERN.test(String(data.channel_id || ""))
                 ? String(data.channel_id)
                 : DEFAULT_CHANNEL_ID;
-            accounts[name] = { token, channel_id: channelId };
+            // Jika decrypt gagal (token = ""), akun tetap dimuat supaya terlihat
+            // di dashboard dan bisa di-edit ulang lewat panel.
+            accounts[name] = { token: token || "", channel_id: channelId };
         }
     } catch (err) {
         console.error("LOAD AUTOCLICK ACCOUNTS ERROR:", err);
@@ -57,7 +114,12 @@ function loadAccounts() {
 function saveAccounts() {
     try {
         fs.mkdirSync(dataDir, { recursive: true });
-        fs.writeFileSync(accountsPath, JSON.stringify(accounts, null, 2));
+        // Token dienkripsi saat ditulis (no-op jika AC_ENC_KEY tidak diset).
+        const toWrite = {};
+        for (const [name, acc] of Object.entries(accounts)) {
+            toWrite[name] = { ...acc, token: encryptToken(acc.token) };
+        }
+        fs.writeFileSync(accountsPath, JSON.stringify(toWrite, null, 2));
     } catch (err) {
         console.error("SAVE AUTOCLICK ACCOUNTS ERROR:", err);
     }
@@ -156,6 +218,7 @@ module.exports = {
     DEFAULT_CHANNEL_ID,
     NAME_PATTERN,
     maskToken,
+    isEncryptionEnabled,
     addAccount,
     updateAccount,
     removeAccount,

@@ -120,7 +120,13 @@ app.disable("x-powered-by");
 app.set("trust proxy", 1);
 app.use(express.json({ limit: JSON_BODY_LIMIT }));
 app.use(cookieParser());
-app.use(express.static(path.join(__dirname, "..", "public")));
+app.use(express.static(path.join(__dirname, "..", "public"), {
+    // Anti-cache basi: browser/CDN harus selalu revalidasi, supaya update UI
+    // langsung terlihat (sebelumnya user bisa dapat app.js lama dari cache).
+    setHeaders(res) {
+        res.setHeader("Cache-Control", "no-cache");
+    }
+}));
 
 // ================= AUTH ROUTES =================
 app.get("/api/auth/me", (req, res) => {
@@ -183,7 +189,13 @@ app.put("/api/config", requireAuth, (req, res) => {
 
 // Dashboard akun + status worker (untuk polling UI)
 app.get("/api/autoclick/status", requireAuth, (req, res) => {
-    res.json({ success: true, data: { accounts: autoClickManager.getDashboard() } });
+    res.json({
+        success: true,
+        data: {
+            accounts: autoClickManager.getDashboard(),
+            encryptionEnabled: autoClickAccounts.isEncryptionEnabled()
+        }
+    });
 });
 
 // Daftar akun (alias dari status, supaya semantik REST jelas)

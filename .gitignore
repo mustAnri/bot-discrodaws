@@ -23,6 +23,10 @@ admin/autoclick/autoclick-config.json
 
 # Local tooling
 .claude/
+dev-admin.js
+
+# Script Python standalone (sudah digantikan port Node.js di admin/autoclick/)
+auto-click.py
 
 # OS files
 .DS_Store
