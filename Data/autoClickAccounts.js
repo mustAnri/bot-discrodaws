@@ -77,10 +77,16 @@ function normalizeToken(token) {
     return String(token || "").replace(/['"]/g, "").trim();
 }
 
+/**
+ * Masker token untuk tampilan UI/API.
+ * Token sensitif → TIDAK ada karakter asli yang ditampilkan sama sekali,
+ * hanya indikator bahwa token sudah terisi. (Jangan pernah mengekspos
+ * potongan token asli di frontend, karena web dipakai rame-rame.)
+ */
 function maskToken(token) {
     const t = String(token || "");
-    if (t.length <= 10) return "********";
-    return `${t.slice(0, 6)}...${t.slice(-4)}`;
+    if (!t) return "(belum diisi)";
+    return "••••••••••••••••";
 }
 
 // ================= LOAD / SAVE =================
