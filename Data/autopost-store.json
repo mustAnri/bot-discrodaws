@@ -3,6 +3,7 @@
   "privateRooms": {},
   "settings": {
     "bannerUrl": "",
-    "whitelistRoleId": ""
+    "whitelistRoleId": "",
+    "setupRoleId": ""
   }
 }

@@ -589,7 +589,8 @@ async function handleSetTokenModal(client, interaction) {
 
 /**
  * Cek akses panel AutoPost. Owner selalu lolos. Jika settings.whitelistRoleId
- * diisi, member harus punya role itu. Jika kosong, semua orang boleh.
+ * atau setupRoleId diisi dan member punya salah satunya, lolos.
+ * Jika whitelist kosong, semua orang boleh.
  * @param {import("discord.js").Interaction} interaction
  * @returns {boolean}
  */
@@ -597,11 +598,13 @@ function hasPanelAccess(interaction) {
     if (!interaction.guild || !interaction.member) return false;
     if (interaction.user.id === interaction.guild.ownerId) return true;
 
-    const { whitelistRoleId } = store.getSettings();
+    const { whitelistRoleId, setupRoleId } = store.getSettings();
     if (!whitelistRoleId) return true; // belum diset = terbuka untuk semua
 
     const roles = interaction.member.roles?.cache;
-    return roles ? roles.has(whitelistRoleId) : false;
+    if (!roles) return false;
+    if (setupRoleId && roles.has(setupRoleId)) return true;
+    return roles.has(whitelistRoleId);
 }
 
 // ─── Main router ────────────────────────────────────────────────────────────

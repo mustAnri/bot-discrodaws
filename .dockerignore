@@ -1,0 +1,12 @@
+node_modules
+.git
+.env
+.env.local
+*.log
+.DS_Store
+Thumbs.db
+.claude
+.opencode-jce
+.opencode-context.md
+dev-admin.js
+auto-click.py

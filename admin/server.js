@@ -571,6 +571,14 @@ app.put("/api/autopost/settings", requireAuth, (req, res) => {
         partial.whitelistRoleId = roleId;
     }
 
+    if (body.setupRoleId !== undefined) {
+        const roleId = typeof body.setupRoleId === "string" ? body.setupRoleId.trim() : "";
+        if (roleId && !/^\d{17,20}$/.test(roleId)) {
+            return res.status(400).json({ success: false, error: "Setup role ID tidak valid." });
+        }
+        partial.setupRoleId = roleId;
+    }
+
     if (!Object.keys(partial).length) {
         return res.status(400).json({ success: false, error: "Tidak ada field settings yang dikirim." });
     }

@@ -3,7 +3,8 @@
  *
  * /autopost [channel] — pasang panel publik AutoPost di channel target.
  * Jika opsi channel tidak diisi, panel dipasang di channel tempat command dijalankan.
- * Setup hanya owner guild. Pemakaian panel (tombol) diatur whitelist role di interactions.js.
+ * Setup: owner guild, atau member dengan role setup (settings.setupRoleId).
+ * Pemakaian panel (tombol) diatur whitelist role di interactions.js.
  */
 
 const {
@@ -23,6 +24,7 @@ const {
 } = require("discord.js");
 
 const { botAvatar, bannerUrl } = require("../admin/autopost/builders");
+const store = require("../Data/autopostStore");
 
 module.exports = {
     name: "autopost",
@@ -39,10 +41,15 @@ module.exports = {
             });
         }
 
-        // Setup hanya owner.
-        if (interaction.user.id !== interaction.guild.ownerId) {
+        // Setup: owner, atau member dengan role setup (jika diset di web panel).
+        const isOwner = interaction.user.id === interaction.guild.ownerId;
+        const { setupRoleId } = store.getSettings();
+        const hasSetupRole = Boolean(
+            setupRoleId && interaction.member?.roles?.cache?.has(setupRoleId)
+        );
+        if (!isOwner && !hasSetupRole) {
             return interaction.reply({
-                content: "❌ Only the server owner can set up the AutoPost panel.",
+                content: "❌ Only the server owner (or the setup role) can set up the AutoPost panel.",
                 flags: MessageFlags.Ephemeral
             });
         }

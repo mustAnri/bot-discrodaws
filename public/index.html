@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/style.css?v=1.1.1">
+    <link rel="stylesheet" href="/style.css?v=1.2.0">
 </head>
 <body>
     <!-- ================= LOGIN ================= -->
@@ -412,7 +412,7 @@
                     <header class="panel-head">
                         <div class="panel-kicker">SEC.13 // PANEL SETTINGS</div>
                         <h2>Pengaturan Panel AUTOPOST</h2>
-                        <p class="panel-desc">Pengaturan global panel Discord AutoPost: banner custom dan role whitelist pengguna panel.</p>
+                        <p class="panel-desc">Pengaturan global panel Discord AutoPost: banner custom, role whitelist pengguna panel, dan role yang boleh menjalankan setup /autopost.</p>
                     </header>
                     <form id="ap-settings-form" class="settings-form">
                         <div class="field">
@@ -421,9 +421,14 @@
                             <small>URL gambar banner untuk panel publik &amp; room. Kosongkan untuk pakai avatar bot.</small>
                         </div>
                         <div class="field">
-                            <label for="ap-whitelist-role">WHITELIST ROLE ID</label>
+                            <label for="ap-whitelist-role">WHITELIST ROLE ID (PENGGUNA PANEL)</label>
                             <input type="text" id="ap-whitelist-role" placeholder="contoh: 1234567890123456789" inputmode="numeric" autocomplete="off">
-                            <small>Role yang boleh memakai tombol panel AutoPost (owner selalu bisa). Kosongkan agar semua member bisa memakai panel. Setup /autopost tetap khusus owner.</small>
+                            <small>Role yang boleh memakai tombol panel AutoPost (owner selalu bisa). Kosongkan agar semua member bisa memakai panel.</small>
+                        </div>
+                        <div class="field">
+                            <label for="ap-setup-role">SETUP ROLE ID (COMMAND /AUTOPOST)</label>
+                            <input type="text" id="ap-setup-role" placeholder="contoh: 1234567890123456789" inputmode="numeric" autocomplete="off">
+                            <small>Role yang boleh menjalankan setup /autopost (owner selalu bisa). Role ini juga otomatis bisa memakai panel. Kosongkan agar hanya owner yang bisa setup.</small>
                         </div>
                         <div class="form-actions">
                             <button type="submit" class="btn btn-primary">SIMPAN SETTINGS</button>
@@ -490,6 +495,6 @@
 
     <div id="toast" class="toast hidden"></div>
 
-    <script src="/app.js?v=1.1.1"></script>
+    <script src="/app.js?v=1.2.0"></script>
 </body>
 </html>

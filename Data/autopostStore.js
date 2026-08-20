@@ -28,7 +28,7 @@ const path = require("path");
 
 const STORE_PATH = path.join(__dirname, "autopost-store.json");
 const DEFAULT_USER = { username: "", token: "", channels: [] };
-const DEFAULT_SETTINGS = { bannerUrl: "", whitelistRoleId: "" };
+const DEFAULT_SETTINGS = { bannerUrl: "", whitelistRoleId: "", setupRoleId: "" };
 
 let cache = loadStore();
 
@@ -195,19 +195,20 @@ function getAllRooms() {
 
 // ================= SETTINGS (banner + whitelist) =================
 
-/** @returns {{bannerUrl: string, whitelistRoleId: string}} */
+/** @returns {{bannerUrl: string, whitelistRoleId: string, setupRoleId: string}} */
 function getSettings() {
     return { ...DEFAULT_SETTINGS, ...cache.settings };
 }
 
 /**
  * Simpan settings global AutoPost.
- * @param {{bannerUrl?: string, whitelistRoleId?: string}} partial
+ * @param {{bannerUrl?: string, whitelistRoleId?: string, setupRoleId?: string}} partial
  */
 function setSettings(partial = {}) {
     cache.settings = {
         bannerUrl: typeof partial.bannerUrl === "string" ? partial.bannerUrl.trim().slice(0, 500) : cache.settings.bannerUrl,
-        whitelistRoleId: typeof partial.whitelistRoleId === "string" ? partial.whitelistRoleId.trim().slice(0, 25) : cache.settings.whitelistRoleId
+        whitelistRoleId: typeof partial.whitelistRoleId === "string" ? partial.whitelistRoleId.trim().slice(0, 25) : cache.settings.whitelistRoleId,
+        setupRoleId: typeof partial.setupRoleId === "string" ? partial.setupRoleId.trim().slice(0, 25) : cache.settings.setupRoleId
     };
     saveStore();
     return getSettings();

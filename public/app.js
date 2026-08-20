@@ -88,6 +88,7 @@
         apSettingsForm: document.getElementById("ap-settings-form"),
         apBannerUrl: document.getElementById("ap-banner-url"),
         apWhitelistRole: document.getElementById("ap-whitelist-role"),
+        apSetupRole: document.getElementById("ap-setup-role"),
         apSettingsReload: document.getElementById("ap-settings-reload"),
         apSettingsStatus: document.getElementById("ap-settings-status")
     };
@@ -1379,12 +1380,13 @@
         }
     });
 
-    // ---- SEC.13: PANEL SETTINGS (banner + whitelist role) ----
+    // ---- SEC.13: PANEL SETTINGS (banner + whitelist role + setup role) ----
     async function loadApSettings() {
         try {
             const { data } = await api("/api/autopost/settings");
             el.apBannerUrl.value = data.bannerUrl || "";
             el.apWhitelistRole.value = data.whitelistRoleId || "";
+            el.apSetupRole.value = data.setupRoleId || "";
             setApConfigStatus("", "ok", el.apSettingsStatus);
         } catch (err) {
             if (err.status === 401) return showView("login");
@@ -1399,7 +1401,8 @@
                 method: "PUT",
                 body: JSON.stringify({
                     bannerUrl: el.apBannerUrl.value.trim(),
-                    whitelistRoleId: el.apWhitelistRole.value.trim()
+                    whitelistRoleId: el.apWhitelistRole.value.trim(),
+                    setupRoleId: el.apSetupRole.value.trim()
                 })
             });
             setApConfigStatus("✅ Settings panel disimpan", "ok", el.apSettingsStatus);
