@@ -30,7 +30,8 @@ const DEFAULT_WORKER_CONFIG = Object.freeze({
     max_delay: 30.0,
     max_click_retries: 3,
     heartbeat_timeout: 90.0,
-    confirm_watchdog_timeout: 30.0
+    confirm_watchdog_timeout: 30.0,
+    activity_name: "" // teks activity presence; kosong = tanpa activity
 });
 
 // ================= UTIL =================
@@ -195,6 +196,7 @@ class AutoClickWorker {
         this.maxClickRetries = Math.max(1, Math.floor(Number(merged.max_click_retries) || 1));
         this.heartbeatTimeout = Math.max(30.0, Number(merged.heartbeat_timeout) || 90);
         this.confirmWatchdogTimeout = Math.max(10.0, Number(merged.confirm_watchdog_timeout) || 30);
+        this.activityName = String(merged.activity_name || "").trim().slice(0, 128);
         // Jaga dynamic delay tetap di dalam bounds baru
         this.currentDelay = Math.max(this.baseDelay, Math.min(this.currentDelay, this.maxDelay));
     }
@@ -509,6 +511,20 @@ class AutoClickWorker {
     sendIdentify() {
         if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
 
+        // Activity presence opsional: hanya dikirim jika teks custom diisi.
+        const presence = {
+            status: "online",
+            since: 0,
+            activities: this.activityName
+                ? [{
+                    name: this.activityName,
+                    type: pick([0, 2, 3]), // 0=Playing, 2=Listening, 3=Watching
+                    created_at: Date.now()
+                }]
+                : [],
+            afk: false
+        };
+
         const identifyPayload = {
             op: 2,
             d: {
@@ -530,16 +546,7 @@ class AutoClickWorker {
                     client_build_number: this.clientBuildNumber,
                     client_event_source: null
                 },
-                presence: {
-                    status: "online",
-                    since: 0,
-                    activities: [{
-                        name: "Auto Verif By MrFunk",
-                        type: pick([0, 2, 3]), // 0=Playing, 2=Listening, 3=Watching
-                        created_at: Date.now()
-                    }],
-                    afk: false
-                },
+                presence,
                 compress: false,
                 client_state: {
                     guild_versions: {},

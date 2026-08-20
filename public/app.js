@@ -49,6 +49,7 @@
         acConfigReload: document.getElementById("ac-config-reload"),
         acConfigStatus: document.getElementById("ac-config-status"),
         acHumanize: document.getElementById("ac-humanize"),
+        acActivityName: document.getElementById("ac-activity_name"),
         acEditModal: document.getElementById("ac-edit-modal"),
         acEditForm: document.getElementById("ac-edit-form"),
         acEditName: document.getElementById("ac-edit-name"),
@@ -888,6 +889,7 @@
                 }
             }
             el.acHumanize.checked = !!data.humanize;
+            el.acActivityName.value = data.activity_name || "";
         } catch (err) {
             if (err.status === 401) return showView("login");
             setAcConfigStatus(`Gagal memuat: ${err.message}`, "err");
@@ -896,7 +898,10 @@
 
     el.acConfigForm.addEventListener("submit", async (e) => {
         e.preventDefault();
-        const payload = { humanize: el.acHumanize.checked };
+        const payload = {
+            humanize: el.acHumanize.checked,
+            activity_name: el.acActivityName.value.trim()
+        };
         for (const field of AC_CONFIG_FIELDS) {
             const input = document.getElementById(`ac-${field}`);
             if (input && input.value.trim() !== "") {

@@ -20,8 +20,18 @@ const DEFAULT_CONFIG = Object.freeze({
     max_delay: 30.0,
     max_click_retries: 3,
     heartbeat_timeout: 90.0,
-    confirm_watchdog_timeout: 30.0
+    confirm_watchdog_timeout: 30.0,
+    activity_name: "" // teks activity presence (watermark); kosong = tanpa activity
 });
+
+const MAX_ACTIVITY_NAME_LENGTH = 128; // batas panjang activity name Discord
+
+/** Sanitasi teks activity: trim + potong sesuai batas Discord. */
+function sanitizeActivityName(value) {
+    return String(value === undefined || value === null ? "" : value)
+        .trim()
+        .slice(0, MAX_ACTIVITY_NAME_LENGTH);
+}
 
 const ALLOWED_KEYS = Object.keys(DEFAULT_CONFIG);
 
@@ -82,6 +92,8 @@ function loadConfig() {
             if (obj[key] === undefined) continue;
             if (key === "humanize") {
                 config[key] = Boolean(obj[key]);
+            } else if (key === "activity_name") {
+                config[key] = sanitizeActivityName(obj[key]);
             } else {
                 const num = Number(obj[key]);
                 if (Number.isFinite(num)) config[key] = num;
@@ -122,6 +134,10 @@ function updateConfig(partial) {
 
         if (key === "humanize") {
             updated[key] = Boolean(partial[key]);
+            continue;
+        }
+        if (key === "activity_name") {
+            updated[key] = sanitizeActivityName(partial[key]);
             continue;
         }
         updated[key] = clampNumber(key, partial[key]);
