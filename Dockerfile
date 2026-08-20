@@ -8,7 +8,7 @@ RUN npm ci --omit=dev
 FROM node:20-alpine
 ENV NODE_ENV=production
 WORKDIR /app
-COPY --from=deps /app/node_modules ./node_modules
-COPY . .
+COPY --from=deps --chown=node:node /app/node_modules ./node_modules
+COPY --chown=node:node . .
 USER node
 CMD ["node", "--expose-gc", "index.js"]
