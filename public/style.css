@@ -841,6 +841,61 @@ body {
 }
 
 /* ============================================================
+   AUTOPOST — tabel user & channel + badge status
+   ============================================================ */
+.ap-users-table,
+.ap-channels-table,
+.ap-room-info {
+    width: 100%;
+    overflow-x: auto;
+}
+
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: var(--font-mono);
+    font-size: 12px;
+}
+
+.data-table th {
+    text-align: left;
+    font-size: 9px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--text-faint);
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--line);
+    white-space: nowrap;
+}
+
+.data-table td {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--line-soft);
+    color: var(--text-dim);
+    vertical-align: middle;
+}
+
+.data-table td strong { color: var(--text); }
+.data-table td small { color: var(--text-faint); font-size: 10px; }
+.data-table td a { color: var(--amber); text-decoration: none; }
+.data-table td a:hover { text-decoration: underline; }
+.data-table tbody tr:hover { background: var(--ink-4); }
+
+.badge {
+    display: inline-block;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    padding: 3px 8px;
+    border-radius: 3px;
+    border: 1px solid var(--line);
+    white-space: nowrap;
+}
+
+.badge.s-ready { background: rgba(126, 224, 138, 0.12); color: var(--phosphor); border-color: rgba(126, 224, 138, 0.3); }
+.badge.s-down { background: rgba(255, 92, 71, 0.10); color: var(--alert); border-color: rgba(255, 92, 71, 0.3); }
+
+/* ============================================================
    RESPONSIVE
    ============================================================ */
 @media (max-width: 640px) {

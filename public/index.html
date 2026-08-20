@@ -50,6 +50,7 @@
             <button class="tab" data-tab="handlers"><span class="tab-idx">02</span> HANDLERS</button>
             <button class="tab" data-tab="system"><span class="tab-idx">03</span> SYSTEM</button>
             <button class="tab" data-tab="autoclick"><span class="tab-idx">04</span> AUTO VERIF</button>
+            <button class="tab" data-tab="autopost"><span class="tab-idx">05</span> AUTOPOST</button>
         </nav>
 
         <main class="content">
@@ -298,6 +299,138 @@
                         <button id="ac-clear-logs-btn" class="btn btn-danger btn-sm">🗑 CLEAR LOG</button>
                     </header>
                     <div id="ac-log-console" class="log-console" aria-live="polite"></div>
+                </div>
+            </section>
+
+            <!-- ========== TAB: AUTOPOST ========== -->
+            <section id="tab-autopost" class="tab-panel hidden">
+                <div class="panel">
+                    <header class="panel-head row">
+                        <div>
+                            <div class="panel-kicker">SEC.10 // AUTOPOST STATUS</div>
+                            <h2>Daftar Pengguna AUTOPOST</h2>
+                            <p class="panel-desc">Status worker autopost per akun. Di-refresh otomatis tiap 5 detik saat tab ini aktif.</p>
+                        </div>
+                        <button id="ap-reload" class="btn btn-ghost btn-sm">↻ REFRESH</button>
+                    </header>
+                    <div id="ap-users-table" class="ap-users-table"></div>
+                    <p id="ap-status" class="status-msg"></p>
+                </div>
+
+                <div class="panel" id="ap-config-section" hidden>
+                    <header class="panel-head row">
+                        <div>
+                            <div class="panel-kicker">SEC.11 // AUTOPOST CONFIG</div>
+                            <h2>Konfigurasi Pengguna: <span id="ap-config-username"></span></h2>
+                            <p class="panel-desc">Kelola token, channel, dan room untuk pengguna terpilih.</p>
+                        </div>
+                        <button id="ap-config-back" class="btn btn-ghost btn-sm">← KEMBALI</button>
+                    </header>
+
+                    <div class="panel">
+                        <header class="panel-head">
+                            <div class="panel-kicker">TOKEN</div>
+                            <h3>Token Discord User</h3>
+                            <p class="panel-desc">Token akun Discord yang dipakai autopost (bukan token bot).</p>
+                        </header>
+                        <form id="ap-token-form" class="settings-form">
+                            <div class="field">
+                                <label for="ap-token-input">TOKEN</label>
+                                <input type="password" id="ap-token-input" placeholder="Token tersembunyi" autocomplete="off">
+                                <small>Kosongkan untuk tidak mengubah token. Placeholder menampilkan preview jika sudah diset.</small>
+                            </div>
+                            <div class="form-actions">
+                                <button type="submit" class="btn btn-primary">SIMPAN TOKEN</button>
+                            </div>
+                        </form>
+                        <p id="ap-token-status" class="status-msg"></p>
+                    </div>
+
+                    <div class="panel">
+                        <header class="panel-head row">
+                            <div>
+                                <div class="panel-kicker">CHANNELS</div>
+                                <h3>Daftar Channel Autopost</h3>
+                                <p class="panel-desc">Setiap baris = satu channel target. Interval minimal 1 detik.</p>
+                            </div>
+                        </header>
+                        <div id="ap-channels-table" class="ap-channels-table"></div>
+
+                        <div class="field">
+                            <label>TAMBAH CHANNEL BARU</label>
+                            <div class="ac-add-grid" style="grid-template-columns: 2fr 3fr 1fr 1fr 1fr 1fr auto; gap: 8px;">
+                                <input type="text" id="ap-new-channelId" placeholder="Channel ID" inputmode="numeric" autocomplete="off">
+                                <textarea id="ap-new-message" placeholder="Pesan yang akan dikirim..." rows="2" style="resize: vertical;"></textarea>
+                                <input type="number" id="ap-new-hours" min="0" max="23" value="0" placeholder="Jam">
+                                <input type="number" id="ap-new-minutes" min="0" max="59" value="5" placeholder="Menit">
+                                <input type="number" id="ap-new-seconds" min="0" max="59" value="0" placeholder="Detik">
+                                <button type="button" id="ap-add-channel" class="btn btn-primary">TAMBAH</button>
+                            </div>
+                        </div>
+                        <p id="ap-channels-status" class="status-msg"></p>
+                    </div>
+
+                    <div class="panel">
+                        <header class="panel-head row">
+                            <div>
+                                <div class="panel-kicker">ROOM</div>
+                                <h3>Info Room / Voice Channel</h3>
+                                <p class="panel-desc">Room voice channel yang dipakai autopost untuk join/leave.</p>
+                            </div>
+                        </header>
+                        <div id="ap-room-info" class="ap-room-info"></div>
+                        <p id="ap-room-status" class="status-msg"></p>
+                    </div>
+
+                    <div class="panel">
+                        <header class="panel-head">
+                            <div class="panel-kicker">CONTROL</div>
+                            <h3>Start / Stop Worker</h3>
+                            <p class="panel-desc">Kontrol worker autopost untuk pengguna ini.</p>
+                        </header>
+                        <div class="form-actions">
+                            <button id="ap-start-user" class="btn btn-primary">▶ START</button>
+                            <button id="ap-stop-user" class="btn btn-danger">⏹ STOP</button>
+                        </div>
+                        <p id="ap-control-status" class="status-msg"></p>
+                    </div>
+                </div>
+
+                <div class="panel">
+                    <header class="panel-head row">
+                        <div>
+                            <div class="panel-kicker">SEC.12 // AUTOPOST LOGS</div>
+                            <h2>Log AUTOPOST</h2>
+                            <p class="panel-desc">Log khusus worker autopost — terpisah dari log server di tab SYSTEM. 400 baris terakhir, live (auto-scroll).</p>
+                        </div>
+                        <button id="ap-clear-logs-btn" class="btn btn-danger btn-sm">🗑 CLEAR LOG</button>
+                    </header>
+                    <div id="ap-log-console" class="log-console" aria-live="polite"></div>
+                </div>
+
+                <div class="panel">
+                    <header class="panel-head">
+                        <div class="panel-kicker">SEC.13 // PANEL SETTINGS</div>
+                        <h2>Pengaturan Panel AUTOPOST</h2>
+                        <p class="panel-desc">Pengaturan global panel Discord AutoPost: banner custom dan role whitelist pengguna panel.</p>
+                    </header>
+                    <form id="ap-settings-form" class="settings-form">
+                        <div class="field">
+                            <label for="ap-banner-url">BANNER URL (CUSTOM)</label>
+                            <input type="url" id="ap-banner-url" placeholder="https://contoh.com/banner.png" autocomplete="off">
+                            <small>URL gambar banner untuk panel publik &amp; room. Kosongkan untuk pakai avatar bot.</small>
+                        </div>
+                        <div class="field">
+                            <label for="ap-whitelist-role">WHITELIST ROLE ID</label>
+                            <input type="text" id="ap-whitelist-role" placeholder="contoh: 1234567890123456789" inputmode="numeric" autocomplete="off">
+                            <small>Role yang boleh memakai tombol panel AutoPost (owner selalu bisa). Kosongkan agar semua member bisa memakai panel. Setup /autopost tetap khusus owner.</small>
+                        </div>
+                        <div class="form-actions">
+                            <button type="submit" class="btn btn-primary">SIMPAN SETTINGS</button>
+                            <button type="button" id="ap-settings-reload" class="btn btn-ghost">↻ RELOAD</button>
+                        </div>
+                    </form>
+                    <p id="ap-settings-status" class="status-msg"></p>
                 </div>
             </section>
         </main>

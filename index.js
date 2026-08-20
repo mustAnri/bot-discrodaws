@@ -42,6 +42,19 @@ client.once("clientReady", () => { // FIX: ready → clientReady
 
 // ================= INTERACTION HANDLER =================
 client.on("interactionCreate", async (interaction) => {
+    // ── AutoPost components (button / modal / select) → router khusus ────
+    if (
+        interaction.isButton() ||
+        interaction.isModalSubmit() ||
+        interaction.isStringSelectMenu()
+    ) {
+        if (interaction.customId && interaction.customId.startsWith("ap_")) {
+            const { handleAutoPostInteraction } = require("./admin/autopost/interactions");
+            return handleAutoPostInteraction(client, interaction);
+        }
+        return; // komponen lain tidak dikelola
+    }
+
     if (!interaction.isChatInputCommand()) return;
 
     const command = client.commands.get(interaction.commandName);

@@ -11,6 +11,9 @@ const autoClickAccounts = require("../Data/autoClickAccounts");
 const autoClickConfig = require("./autoclick/config");
 const autoClickManager = require("./autoclick/manager");
 const autoClickLogStore = require("./autoclick/logStore");
+const autopostStore = require("../Data/autopostStore");
+const autopostEngine = require("./autopost/engine");
+const autopostLogStore = require("./autopost/logStore");
 const logStore = require("./logStore");
 const systemInfo = require("./systemInfo");
 
@@ -363,6 +366,217 @@ app.get("/api/autoclick/logs", requireAuth, (req, res) => {
 app.post("/api/autoclick/logs/clear", requireAuth, (req, res) => {
     autoClickLogStore.clear();
     res.json({ success: true });
+});
+
+// ================= AUTOPOST ROUTES =================
+
+// Helper: mask token agar tidak pernah dikirim penuh ke web
+function maskToken(token) {
+    if (!token) return "";
+    if (token.length <= 6) return "•".repeat(token.length);
+    return `${token.slice(0, 6)}${"•".repeat(Math.min(token.length - 6, 12))}…`;
+}
+
+// Status semua user + daftar private room (dashboard)
+app.get("/api/autopost/status", requireAuth, (req, res) => {
+    res.json({
+        success: true,
+        data: {
+            statuses: autopostEngine.getStatuses(),
+            rooms: autopostStore.getAllRooms()
+        }
+    });
+});
+
+// List ringkas semua user autopost (untuk tabel SEC.10 di web)
+app.get("/api/autopost/users", requireAuth, (req, res) => {
+    const users = autopostEngine.getStatuses().map((s) => {
+        const cfg = autopostStore.peekUserConfig(s.userId) || {};
+        return {
+            userId: s.userId,
+            username: s.username,
+            running: s.running,
+            tokenSet: s.hasToken,
+            tokenPreview: maskToken(cfg.token),
+            channelCount: s.channelCount,
+            room: autopostStore.getUserRoom(s.userId) || null
+        };
+    });
+    res.json({ success: true, data: users });
+});
+
+// Detail config satu user (token di-mask)
+app.get("/api/autopost/users/:id", requireAuth, (req, res) => {
+    const userId = req.params.id;
+    const cfg = autopostStore.peekUserConfig(userId);
+    if (!cfg) {
+        return res.status(404).json({ success: false, error: "User config tidak ditemukan." });
+    }
+    res.json({
+        success: true,
+        data: {
+            userId,
+            username: cfg.username || "",
+            token: maskToken(cfg.token),
+            tokenPreview: maskToken(cfg.token),
+            hasToken: Boolean(cfg.token),
+            channels: cfg.channels,
+            running: autopostEngine.isAutoPostActive(userId),
+            room: autopostStore.getUserRoom(userId) || null
+        }
+    });
+});
+
+// Simpan / update token user
+app.put("/api/autopost/users/:id/token", requireAuth, (req, res) => {
+    const userId = req.params.id;
+    const token = typeof (req.body && req.body.token) === "string" ? req.body.token.trim() : "";
+    if (!token) {
+        return res.status(400).json({ success: false, error: "Token tidak boleh kosong." });
+    }
+    const cfg = autopostStore.setUserConfig(userId, { token });
+    res.json({ success: true, data: { userId, hasToken: Boolean(cfg.token) } });
+});
+
+// Tambah channel — terima kedua bentuk payload:
+//   { channelId, message, interval }          (detik, langsung)
+//   { channelId, message, hours, minutes, seconds }  (dihitung jadi detik)
+app.post("/api/autopost/users/:id/channels", requireAuth, (req, res) => {
+    const userId = req.params.id;
+    const { channelId, message, interval, hours, minutes, seconds } = req.body || {};
+
+    if (!channelId || typeof channelId !== "string") {
+        return res.status(400).json({ success: false, error: "channelId wajib diisi." });
+    }
+    if (typeof message !== "string" || message.trim().length === 0) {
+        return res.status(400).json({ success: false, error: "Message wajib diisi." });
+    }
+
+    // Hitung interval detik: pakai field "interval" jika ada, jika tidak hitung dari h/m/s.
+    let iv;
+    if (interval !== undefined && interval !== null && interval !== "") {
+        iv = Number(interval);
+    } else {
+        const h = Number(hours) || 0;
+        const m = Number(minutes) || 0;
+        const s = Number(seconds) || 0;
+        iv = h * 3600 + m * 60 + s;
+    }
+
+    if (!Number.isFinite(iv) || iv <= 0) {
+        return res.status(400).json({ success: false, error: "Interval harus > 0 detik." });
+    }
+
+    const added = autopostStore.addChannel(userId, {
+        id: channelId.trim(),
+        message: message.trim(),
+        interval: Math.floor(iv)
+    });
+
+    if (!added) {
+        return res.status(409).json({ success: false, error: "Channel sudah ada di config." });
+    }
+    res.json({ success: true, data: autopostStore.peekUserConfig(userId).channels });
+});
+
+// Hapus channel
+app.delete("/api/autopost/users/:id/channels/:cid", requireAuth, (req, res) => {
+    const { id, cid } = req.params;
+    const removed = autopostStore.removeChannel(id, cid);
+    if (!removed) {
+        return res.status(404).json({ success: false, error: "Channel tidak ditemukan." });
+    }
+    res.json({ success: true, data: autopostStore.peekUserConfig(id).channels });
+});
+
+// Start posting untuk satu user
+app.post("/api/autopost/users/:id/start", requireAuth, (req, res) => {
+    const userId = req.params.id;
+    if (autopostEngine.isAutoPostActive(userId)) {
+        return res.status(409).json({ success: false, error: "AutoPost sudah berjalan." });
+    }
+    const started = autopostEngine.startAutoPost(userId);
+    if (!started) {
+        return res.status(400).json({ success: false, error: "Gagal start: token / channel belum lengkap." });
+    }
+    res.json({ success: true, data: { userId, running: true } });
+});
+
+// Stop posting untuk satu user
+app.post("/api/autopost/users/:id/stop", requireAuth, (req, res) => {
+    const userId = req.params.id;
+    const stopped = autopostEngine.stopAutoPost(userId);
+    if (!stopped) {
+        return res.status(400).json({ success: false, error: "AutoPost memang tidak berjalan." });
+    }
+    res.json({ success: true, data: { userId, running: false } });
+});
+
+// Hapus private room (delete channel Discord jika masih ada)
+app.delete("/api/autopost/users/:id/room", requireAuth, async (req, res) => {
+    const userId = req.params.id;
+    const room = autopostStore.getUserRoom(userId);
+    if (!room) {
+        return res.status(404).json({ success: false, error: "User tidak punya private room." });
+    }
+
+    try {
+        if (discordClient) {
+            const channel = await discordClient.channels.fetch(room.channelId).catch(() => null);
+            if (channel) await channel.delete("Dihapus via web admin panel").catch(() => {});
+        }
+    } catch (err) {
+        console.error("[AUTOPOST] delete room channel error:", err.message);
+    }
+
+    autopostStore.deletePrivateRoom(room.roomId);
+    res.json({ success: true, data: { roomId: room.roomId } });
+});
+
+// Log autopost
+app.get("/api/autopost/logs", requireAuth, (req, res) => {
+    const after = typeof req.query.after === "string" && req.query.after.length > 0
+        ? req.query.after
+        : null;
+    res.json({ success: true, data: autopostLogStore.getLogs(after) });
+});
+
+app.post("/api/autopost/logs/clear", requireAuth, (req, res) => {
+    autopostLogStore.clear();
+    res.json({ success: true });
+});
+
+// Settings global AutoPost (banner custom + role whitelist)
+app.get("/api/autopost/settings", requireAuth, (req, res) => {
+    res.json({ success: true, data: autopostStore.getSettings() });
+});
+
+app.put("/api/autopost/settings", requireAuth, (req, res) => {
+    const body = req.body || {};
+    const partial = {};
+
+    if (body.bannerUrl !== undefined) {
+        const url = typeof body.bannerUrl === "string" ? body.bannerUrl.trim() : "";
+        if (url && !/^https?:\/\/.+/.test(url)) {
+            return res.status(400).json({ success: false, error: "Banner URL harus dimulai dengan http:// atau https://." });
+        }
+        partial.bannerUrl = url.slice(0, 500);
+    }
+
+    if (body.whitelistRoleId !== undefined) {
+        const roleId = typeof body.whitelistRoleId === "string" ? body.whitelistRoleId.trim() : "";
+        if (roleId && !/^\d{17,20}$/.test(roleId)) {
+            return res.status(400).json({ success: false, error: "Whitelist role ID tidak valid." });
+        }
+        partial.whitelistRoleId = roleId;
+    }
+
+    if (!Object.keys(partial).length) {
+        return res.status(400).json({ success: false, error: "Tidak ada field settings yang dikirim." });
+    }
+
+    const settings = autopostStore.setSettings(partial);
+    res.json({ success: true, data: settings });
 });
 
 // ================= HANDLER ROUTES =================

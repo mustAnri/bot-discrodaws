@@ -1,5 +1,5 @@
 require("dotenv").config();
-const { REST, Routes, SlashCommandBuilder, ApplicationCommandOptionType } = require("discord.js");
+const { REST, Routes, SlashCommandBuilder, ApplicationCommandOptionType, ChannelType } = require("discord.js");
 
 const commands = [
     // /menu tanpa input
@@ -81,6 +81,18 @@ new SlashCommandBuilder()
     new SlashCommandBuilder()
         .setName("ranking")
         .setDescription("See Rank Handler"),
+
+    // /autopost dengan opsi channel target (owner-only di handler)
+    new SlashCommandBuilder()
+        .setName("autopost")
+        .setDescription("Buka panel AutoPost")
+        .addChannelOption(option =>
+            option
+                .setName("channel")
+                .setDescription("Channel tempat panel AutoPost dipasang (default: channel ini)")
+                .addChannelTypes(ChannelType.GuildText)
+                .setRequired(false)
+        ),
 ].map(cmd => cmd.toJSON());
 
 const rest = new REST({ version: "10" }).setToken(process.env.TOKEN);

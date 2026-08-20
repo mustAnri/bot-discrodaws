@@ -59,7 +59,37 @@
         acEditError: document.getElementById("ac-edit-error"),
         acLogConsole: document.getElementById("ac-log-console"),
         acClearLogsBtn: document.getElementById("ac-clear-logs-btn"),
-        appVersion: document.getElementById("app-version")
+        appVersion: document.getElementById("app-version"),
+        // AUTOPOST
+        apReload: document.getElementById("ap-reload"),
+        apUsersTable: document.getElementById("ap-users-table"),
+        apStatus: document.getElementById("ap-status"),
+        apConfigSection: document.getElementById("ap-config-section"),
+        apConfigUsername: document.getElementById("ap-config-username"),
+        apConfigBack: document.getElementById("ap-config-back"),
+        apTokenForm: document.getElementById("ap-token-form"),
+        apTokenInput: document.getElementById("ap-token-input"),
+        apTokenStatus: document.getElementById("ap-token-status"),
+        apChannelsTable: document.getElementById("ap-channels-table"),
+        apNewChannelId: document.getElementById("ap-new-channelId"),
+        apNewMessage: document.getElementById("ap-new-message"),
+        apNewHours: document.getElementById("ap-new-hours"),
+        apNewMinutes: document.getElementById("ap-new-minutes"),
+        apNewSeconds: document.getElementById("ap-new-seconds"),
+        apAddChannel: document.getElementById("ap-add-channel"),
+        apChannelsStatus: document.getElementById("ap-channels-status"),
+        apRoomInfo: document.getElementById("ap-room-info"),
+        apRoomStatus: document.getElementById("ap-room-status"),
+        apStartUser: document.getElementById("ap-start-user"),
+        apStopUser: document.getElementById("ap-stop-user"),
+        apControlStatus: document.getElementById("ap-control-status"),
+        apLogConsole: document.getElementById("ap-log-console"),
+        apClearLogsBtn: document.getElementById("ap-clear-logs-btn"),
+        apSettingsForm: document.getElementById("ap-settings-form"),
+        apBannerUrl: document.getElementById("ap-banner-url"),
+        apWhitelistRole: document.getElementById("ap-whitelist-role"),
+        apSettingsReload: document.getElementById("ap-settings-reload"),
+        apSettingsStatus: document.getElementById("ap-settings-status")
     };
 
     let editingUserId = null;
@@ -72,6 +102,11 @@
     let acEditingName = null;
     let acLogPollTimer = null;
     let lastAcLogTs = null;
+    // AUTOPOST
+    let apPollTimer = null;
+    let apSelectedUserId = null;
+    let apLogPollTimer = null;
+    let lastApLogTs = null;
 
     // ================= UTIL =================
     async function api(path, options = {}) {
@@ -153,6 +188,7 @@
             document.getElementById("tab-handlers").classList.toggle("hidden", target !== "handlers");
             document.getElementById("tab-system").classList.toggle("hidden", target !== "system");
             document.getElementById("tab-autoclick").classList.toggle("hidden", target !== "autoclick");
+            document.getElementById("tab-autopost").classList.toggle("hidden", target !== "autopost");
             onTabSwitch(target);
         });
     });
@@ -625,6 +661,20 @@
             clearInterval(acLogPollTimer);
             acLogPollTimer = null;
         }
+
+        // ---- Polling lifecycle: AUTOPOST ----
+        if (tab === "autopost") {
+            loadApUsers();
+            loadApSettings();
+            pollApLogs(true);
+            apPollTimer = setInterval(loadApUsers, AP_POLL_MS);
+            apLogPollTimer = setInterval(() => pollApLogs(false), AP_LOG_POLL_MS);
+        } else {
+            clearInterval(apPollTimer);
+            apPollTimer = null;
+            clearInterval(apLogPollTimer);
+            apLogPollTimer = null;
+        }
     }
 
     // ================= AUTO VERIF (AUTO-CLICK) =================
@@ -634,6 +684,10 @@
         "human_delay_min", "human_delay_max",
         "max_click_retries", "heartbeat_timeout", "confirm_watchdog_timeout"
     ];
+
+    // ================= AUTOPOST =================
+    const AP_POLL_MS = 5000;
+    const AP_LOG_POLL_MS = 3000;
 
     // Badge berdasarkan string status worker dari backend
     const AC_STATUS_BADGES = {
@@ -962,6 +1016,401 @@
             // Tidak kritis — biarkan badge default.
         }
     }
+
+    // ================= AUTOPOST =================
+    // ---- SEC.10: AUTOPOST STATUS ----
+    async function loadApUsers() {
+        try {
+            const { data } = await api("/api/autopost/users");
+            renderApUsersTable(data);
+            el.apStatus.textContent = `✅ Terakhir dimuat: ${new Date().toLocaleTimeString()}`;
+            el.apStatus.className = "status-msg ok";
+        } catch (err) {
+            if (err.status === 401) return showView("login");
+            el.apStatus.textContent = `❌ Gagal memuat: ${err.message}`;
+            el.apStatus.className = "status-msg err";
+        }
+    }
+
+    function renderApUsersTable(users) {
+        if (!users || users.length === 0) {
+            el.apUsersTable.innerHTML = `<p class="panel-desc">Belum ada pengguna autopost.</p>`;
+            return;
+        }
+
+        const rows = users.map(u => {
+            const statusBadge = u.running
+                ? `<span class="badge s-ready">🟢 Running</span>`
+                : `<span class="badge s-down">🔴 Stopped</span>`;
+            const tokenBadge = u.tokenSet
+                ? `<span class="badge s-ready">Set (${escapeHtml(u.tokenPreview)})</span>`
+                : `<span class="badge s-down">Not Set</span>`;
+            const roomLink = u.room && u.room.channelId
+                ? `<a href="https://discord.com/channels/${u.room.guildId || "@me"}/${u.room.channelId}" target="_blank" rel="noopener">${escapeHtml(u.room.channelId)}</a>`
+                : "—";
+
+            return `
+                <tr>
+                    <td>
+                        <div><strong>${escapeHtml(u.username)}</strong></div>
+                        <small>${escapeHtml(u.userId)}</small>
+                    </td>
+                    <td>${statusBadge}</td>
+                    <td>${tokenBadge}</td>
+                    <td>${u.channelCount || 0}</td>
+                    <td>${roomLink}</td>
+                    <td>
+                        <div class="form-actions" style="gap: 4px;">
+                            <button class="btn btn-ghost btn-sm" data-action="ap-view" data-user-id="${escapeHtml(u.userId)}" data-username="${escapeHtml(u.username)}">View</button>
+                            <button class="btn btn-primary btn-sm" data-action="ap-start" data-user-id="${escapeHtml(u.userId)}" ${u.running ? "disabled" : ""}>Start</button>
+                            <button class="btn btn-danger btn-sm" data-action="ap-stop" data-user-id="${escapeHtml(u.userId)}" ${!u.running ? "disabled" : ""}>Stop</button>
+                        </div>
+                    </td>
+                </tr>
+            `;
+        }).join("");
+
+        el.apUsersTable.innerHTML = `
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>User</th>
+                        <th>Status</th>
+                        <th>Token</th>
+                        <th>Channels</th>
+                        <th>Room</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${rows}
+                </tbody>
+            </table>
+        `;
+    }
+
+    // Event delegation for ap-users-table actions
+    el.apUsersTable.addEventListener("click", async (e) => {
+        const btn = e.target.closest("button[data-action]");
+        if (!btn) return;
+        const action = btn.dataset.action;
+        const userId = btn.dataset.userId;
+        const username = btn.dataset.username;
+
+        if (action === "ap-view") {
+            openApConfig(userId, username);
+        } else if (action === "ap-start") {
+            await apControlUser(userId, "start");
+        } else if (action === "ap-stop") {
+            await apControlUser(userId, "stop");
+        }
+    });
+
+    async function apControlUser(userId, action) {
+        try {
+            const endpoint = action === "start" ? `/api/autopost/users/${userId}/start` : `/api/autopost/users/${userId}/stop`;
+            await api(endpoint, { method: "POST" });
+            showToast(`✅ Worker ${action === "start" ? "dimulai" : "dihentikan"}`);
+            if (activeTab === "autopost") loadApUsers();
+        } catch (err) {
+            if (err.status === 401) return showView("login");
+            showToast(err.message, "err");
+        }
+    }
+
+    el.apReload.addEventListener("click", loadApUsers);
+
+    // ---- SEC.11: AUTOPOST CONFIG (per-user editor) ----
+    function openApConfig(userId, username) {
+        apSelectedUserId = userId;
+        el.apConfigUsername.textContent = `${escapeHtml(username)} (${escapeHtml(userId)})`;
+        el.apConfigSection.hidden = false;
+        // Clear previous statuses
+        el.apTokenStatus.textContent = "";
+        el.apChannelsStatus.textContent = "";
+        el.apRoomStatus.textContent = "";
+        el.apControlStatus.textContent = "";
+        // Load user config
+        loadApUserConfig(userId);
+    }
+
+    function closeApConfig() {
+        apSelectedUserId = null;
+        el.apConfigSection.hidden = true;
+    }
+
+    el.apConfigBack.addEventListener("click", closeApConfig);
+
+    async function loadApUserConfig(userId) {
+        try {
+            const { data } = await api(`/api/autopost/users/${userId}`);
+            // Token preview
+            if (data.tokenPreview) {
+                el.apTokenInput.placeholder = `Token tersembunyi (${escapeHtml(data.tokenPreview)})`;
+            } else {
+                el.apTokenInput.placeholder = "Token tersembunyi";
+            }
+            // Channels
+            renderApChannelsTable(data.channels || []);
+            // Room
+            renderApRoomInfo(data.room);
+            // Start/Stop buttons state
+            el.apStartUser.disabled = data.running;
+            el.apStopUser.disabled = !data.running;
+        } catch (err) {
+            if (err.status === 401) return showView("login");
+            setApConfigStatus(`Gagal memuat: ${err.message}`, "err");
+        }
+    }
+
+    function setApConfigStatus(msg, type = "ok", element = el.apChannelsStatus) {
+        element.textContent = msg;
+        element.className = `status-msg ${type}`;
+    }
+
+    // Token form
+    el.apTokenForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        if (!apSelectedUserId) return;
+        const token = el.apTokenInput.value.trim();
+        if (!token) {
+            setApConfigStatus("Token tidak boleh kosong", "err", el.apTokenStatus);
+            return;
+        }
+        try {
+            await api(`/api/autopost/users/${apSelectedUserId}/token`, {
+                method: "PUT",
+                body: JSON.stringify({ token })
+            });
+            el.apTokenInput.value = "";
+            setApConfigStatus("✅ Token disimpan", "ok", el.apTokenStatus);
+            loadApUserConfig(apSelectedUserId);
+            if (activeTab === "autopost") loadApUsers();
+        } catch (err) {
+            if (err.status === 401) return showView("login");
+            setApConfigStatus(err.message, "err", el.apTokenStatus);
+        }
+    });
+
+    // Channels table
+    function renderApChannelsTable(channels) {
+        if (!channels || channels.length === 0) {
+            el.apChannelsTable.innerHTML = `<p class="panel-desc">Belum ada channel. Tambahkan di bawah.</p>`;
+            return;
+        }
+
+        const rows = channels.map((ch, idx) => {
+            const interval = formatInterval(ch.interval);
+            const msg = escapeHtml(ch.message || "");
+            const truncated = msg.length > 60 ? msg.slice(0, 60) + "…" : msg;
+            return `
+                <tr>
+                    <td>${escapeHtml(ch.id)}</td>
+                    <td>${truncated}</td>
+                    <td>${interval}</td>
+                    <td>
+                        <button class="btn btn-danger btn-sm" data-action="ap-remove-channel" data-channel-id="${escapeHtml(ch.id)}">Hapus</button>
+                    </td>
+                </tr>
+            `;
+        }).join("");
+
+        el.apChannelsTable.innerHTML = `
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Channel ID</th>
+                        <th>Message (truncated)</th>
+                        <th>Interval</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${rows}
+                </tbody>
+            </table>
+        `;
+    }
+
+    function formatInterval(totalSec) {
+        if (!totalSec) return "0s";
+        const h = Math.floor(totalSec / 3600);
+        const m = Math.floor((totalSec % 3600) / 60);
+        const s = totalSec % 60;
+        const parts = [];
+        if (h > 0) parts.push(`${h}j`);
+        if (m > 0) parts.push(`${m}m`);
+        if (s > 0 || parts.length === 0) parts.push(`${s}d`);
+        return parts.join(" ");
+    }
+
+    // Add channel
+    el.apAddChannel.addEventListener("click", async () => {
+        if (!apSelectedUserId) return;
+        const channelId = el.apNewChannelId.value.trim();
+        const message = el.apNewMessage.value.trim();
+        const hours = parseInt(el.apNewHours.value) || 0;
+        const minutes = parseInt(el.apNewMinutes.value) || 0;
+        const seconds = parseInt(el.apNewSeconds.value) || 0;
+
+        if (!channelId || !message) {
+            setApConfigStatus("Channel ID dan Pesan wajib diisi", "err");
+            return;
+        }
+        const totalMs = ((hours * 3600) + (minutes * 60) + seconds) * 1000;
+        if (totalMs < 1000) {
+            setApConfigStatus("Interval minimal 1 detik", "err");
+            return;
+        }
+
+        try {
+            await api(`/api/autopost/users/${apSelectedUserId}/channels`, {
+                method: "POST",
+                body: JSON.stringify({ channelId, message, hours, minutes, seconds })
+            });
+            el.apNewChannelId.value = "";
+            el.apNewMessage.value = "";
+            el.apNewHours.value = 0;
+            el.apNewMinutes.value = 5;
+            el.apNewSeconds.value = 0;
+            setApConfigStatus("✅ Channel ditambahkan", "ok");
+            loadApUserConfig(apSelectedUserId);
+            if (activeTab === "autopost") loadApUsers();
+        } catch (err) {
+            if (err.status === 401) return showView("login");
+            setApConfigStatus(err.message, "err");
+        }
+    });
+
+    // Remove channel (event delegation)
+    el.apChannelsTable.addEventListener("click", async (e) => {
+        const btn = e.target.closest("button[data-action='ap-remove-channel']");
+        if (!btn || !apSelectedUserId) return;
+        const channelId = btn.dataset.channelId;
+        if (!confirm(`Hapus channel ${channelId}?`)) return;
+        try {
+            await api(`/api/autopost/users/${apSelectedUserId}/channels/${channelId}`, { method: "DELETE" });
+            setApConfigStatus("✅ Channel dihapus", "ok");
+            loadApUserConfig(apSelectedUserId);
+            if (activeTab === "autopost") loadApUsers();
+        } catch (err) {
+            if (err.status === 401) return showView("login");
+            setApConfigStatus(err.message, "err");
+        }
+    });
+
+    // Room info
+    function renderApRoomInfo(room) {
+        if (!room || !room.channelId) {
+            el.apRoomInfo.innerHTML = `<p class="panel-desc">Belum ada room voice channel yang dikonfigurasi.</p>`;
+            return;
+        }
+        // room.guildId = ID guild tempat room dibuat, room.channelId = channel private room
+        const guildId = room.guildId || "@me";
+        const channelId = room.channelId;
+        el.apRoomInfo.innerHTML = `
+            <div class="field">
+                <label>Room Voice Channel</label>
+                <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                    <a href="https://discord.com/channels/${guildId}/${channelId}" target="_blank" rel="noopener" class="btn btn-ghost btn-sm">
+                        Buka di Discord
+                    </a>
+                    <button class="btn btn-danger btn-sm" data-action="ap-close-room">Tutup Room</button>
+                </div>
+                <small>Guild: ${escapeHtml(guildId)} • Channel: ${escapeHtml(channelId)}</small>
+            </div>
+        `;
+    }
+
+    el.apRoomInfo.addEventListener("click", async (e) => {
+        const btn = e.target.closest("button[data-action='ap-close-room']");
+        if (!btn || !apSelectedUserId) return;
+        if (!confirm("Tutup room voice channel untuk pengguna ini?")) return;
+        try {
+            await api(`/api/autopost/users/${apSelectedUserId}/room`, { method: "DELETE" });
+            setApConfigStatus("✅ Room ditutup", "ok", el.apRoomStatus);
+            loadApUserConfig(apSelectedUserId);
+            if (activeTab === "autopost") loadApUsers();
+        } catch (err) {
+            if (err.status === 401) return showView("login");
+            setApConfigStatus(err.message, "err", el.apRoomStatus);
+        }
+    });
+
+    // Start/Stop user
+    el.apStartUser.addEventListener("click", async () => {
+        if (!apSelectedUserId) return;
+        await apControlUser(apSelectedUserId, "start");
+        el.apStartUser.disabled = true;
+        el.apStopUser.disabled = false;
+        setApConfigStatus("✅ Worker dimulai", "ok", el.apControlStatus);
+    });
+
+    el.apStopUser.addEventListener("click", async () => {
+        if (!apSelectedUserId) return;
+        await apControlUser(apSelectedUserId, "stop");
+        el.apStartUser.disabled = false;
+        el.apStopUser.disabled = true;
+        setApConfigStatus("✅ Worker dihentikan", "ok", el.apControlStatus);
+    });
+
+    // ---- SEC.12: AUTOPOST LOGS ----
+    async function pollApLogs(full = false) {
+        try {
+            const query = (!full && lastApLogTs) ? `?after=${encodeURIComponent(lastApLogTs)}` : "";
+            const { data } = await api(`/api/autopost/logs${query}`);
+            if (data.length > 0) {
+                appendLogLines(data, el.apLogConsole);
+                lastApLogTs = data[data.length - 1].ts;
+            }
+        } catch (err) {
+            if (err.status === 401) showView("login");
+        }
+    }
+
+    el.apClearLogsBtn.addEventListener("click", async () => {
+        try {
+            await api("/api/autopost/logs/clear", { method: "POST" });
+            el.apLogConsole.innerHTML = "";
+            lastApLogTs = null;
+            showToast("Log autopost dibersihkan");
+        } catch (err) {
+            showToast(err.message, "err");
+        }
+    });
+
+    // ---- SEC.13: PANEL SETTINGS (banner + whitelist role) ----
+    async function loadApSettings() {
+        try {
+            const { data } = await api("/api/autopost/settings");
+            el.apBannerUrl.value = data.bannerUrl || "";
+            el.apWhitelistRole.value = data.whitelistRoleId || "";
+            setApConfigStatus("", "ok", el.apSettingsStatus);
+        } catch (err) {
+            if (err.status === 401) return showView("login");
+            setApConfigStatus(err.message, "err", el.apSettingsStatus);
+        }
+    }
+
+    el.apSettingsForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        try {
+            await api("/api/autopost/settings", {
+                method: "PUT",
+                body: JSON.stringify({
+                    bannerUrl: el.apBannerUrl.value.trim(),
+                    whitelistRoleId: el.apWhitelistRole.value.trim()
+                })
+            });
+            setApConfigStatus("✅ Settings panel disimpan", "ok", el.apSettingsStatus);
+            showToast("Settings panel autopost disimpan");
+        } catch (err) {
+            if (err.status === 401) return showView("login");
+            setApConfigStatus(err.message, "err", el.apSettingsStatus);
+        }
+    });
+
+    el.apSettingsReload.addEventListener("click", loadApSettings);
 
     // ================= INIT =================
     function initDashboard() {
