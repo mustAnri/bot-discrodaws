@@ -78,6 +78,12 @@
         apNewSeconds: document.getElementById("ap-new-seconds"),
         apAddChannel: document.getElementById("ap-add-channel"),
         apChannelsStatus: document.getElementById("ap-channels-status"),
+        apEditBox: document.getElementById("ap-edit-channel-box"),
+        apEditChannelId: document.getElementById("ap-edit-channel-id"),
+        apEditMessage: document.getElementById("ap-edit-message"),
+        apSaveEdit: document.getElementById("ap-save-edit"),
+        apCancelEdit: document.getElementById("ap-cancel-edit"),
+        apEditStatus: document.getElementById("ap-edit-status"),
         apRoomInfo: document.getElementById("ap-room-info"),
         apRoomStatus: document.getElementById("ap-room-status"),
         apStartUser: document.getElementById("ap-start-user"),
@@ -108,6 +114,8 @@
     let apSelectedUserId = null;
     let apLogPollTimer = null;
     let lastApLogTs = null;
+    let apEditingChannelId = null;
+    let apChannelsCache = [];
 
     // ================= UTIL =================
     async function api(path, options = {}) {
@@ -1147,6 +1155,7 @@
         el.apChannelsStatus.textContent = "";
         el.apRoomStatus.textContent = "";
         el.apControlStatus.textContent = "";
+        closeApEdit();
         // Load user config
         loadApUserConfig(userId);
     }
@@ -1211,6 +1220,7 @@
 
     // Channels table
     function renderApChannelsTable(channels) {
+        apChannelsCache = channels || [];
         if (!channels || channels.length === 0) {
             el.apChannelsTable.innerHTML = `<p class="panel-desc">Belum ada channel. Tambahkan di bawah.</p>`;
             return;
@@ -1230,6 +1240,7 @@
                     </td>
                     <td>${interval}</td>
                     <td>
+                        <button class="btn btn-ghost btn-sm" data-action="ap-edit-channel" data-channel-id="${escapeHtml(ch.id)}">Edit</button>
                         <button class="btn btn-danger btn-sm" data-action="ap-remove-channel" data-channel-id="${escapeHtml(ch.id)}">Hapus</button>
                     </td>
                 </tr>
@@ -1312,6 +1323,13 @@
             if (full) full.classList.toggle("hidden");
             return;
         }
+        const editBtn = e.target.closest("button[data-action='ap-edit-channel']");
+        if (editBtn) {
+            const channelId = editBtn.dataset.channelId;
+            const ch = apChannelsCache.find((c) => c.id === channelId);
+            openApEdit(channelId, ch ? ch.message || "" : "");
+            return;
+        }
         const btn = e.target.closest("button[data-action='ap-remove-channel']");
         if (!btn || !apSelectedUserId) return;
         const channelId = btn.dataset.channelId;
@@ -1324,6 +1342,47 @@
         } catch (err) {
             if (err.status === 401) return showView("login");
             setApConfigStatus(err.message, "err");
+        }
+    });
+
+    // Edit message channel
+    function openApEdit(channelId, message) {
+        apEditingChannelId = channelId;
+        el.apEditChannelId.textContent = channelId;
+        el.apEditMessage.value = message;
+        el.apEditStatus.textContent = "";
+        el.apEditBox.hidden = false;
+        el.apEditMessage.focus();
+    }
+
+    function closeApEdit() {
+        apEditingChannelId = null;
+        el.apEditMessage.value = "";
+        el.apEditStatus.textContent = "";
+        if (el.apEditBox) el.apEditBox.hidden = true;
+    }
+
+    el.apCancelEdit.addEventListener("click", closeApEdit);
+
+    el.apSaveEdit.addEventListener("click", async () => {
+        if (!apSelectedUserId || !apEditingChannelId) return;
+        const message = el.apEditMessage.value.trim();
+        if (!message) {
+            setApConfigStatus("Message tidak boleh kosong", "err", el.apEditStatus);
+            return;
+        }
+        try {
+            await api(`/api/autopost/users/${apSelectedUserId}/channels/${apEditingChannelId}`, {
+                method: "PUT",
+                body: JSON.stringify({ message })
+            });
+            setApConfigStatus("✅ Message diperbarui", "ok", el.apEditStatus);
+            closeApEdit();
+            loadApUserConfig(apSelectedUserId);
+            if (activeTab === "autopost") loadApUsers();
+        } catch (err) {
+            if (err.status === 401) return showView("login");
+            setApConfigStatus(err.message, "err", el.apEditStatus);
         }
     });
 

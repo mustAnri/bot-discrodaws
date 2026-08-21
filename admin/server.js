@@ -503,6 +503,21 @@ app.post("/api/autopost/users/:id/channels", requireAuth, (req, res) => {
     res.json({ success: true, data: autopostStore.peekUserConfig(userId).channels });
 });
 
+// Edit message channel yang sudah ada. Perubahan langsung dipakai oleh loop
+// AutoPost yang sedang berjalan (store.updateChannel mutasi in-place).
+app.put("/api/autopost/users/:id/channels/:cid", requireAuth, (req, res) => {
+    const { id, cid } = req.params;
+    const message = typeof (req.body && req.body.message) === "string" ? req.body.message.trim() : "";
+    if (!message) {
+        return res.status(400).json({ success: false, error: "Message tidak boleh kosong." });
+    }
+    const updated = autopostStore.updateChannel(id, cid, { message });
+    if (!updated) {
+        return res.status(404).json({ success: false, error: "Channel tidak ditemukan." });
+    }
+    res.json({ success: true, data: autopostStore.peekUserConfig(id).channels });
+});
+
 // Hapus channel
 app.delete("/api/autopost/users/:id/channels/:cid", requireAuth, (req, res) => {
     const { id, cid } = req.params;

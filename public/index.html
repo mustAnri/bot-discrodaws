@@ -356,6 +356,18 @@
                         </header>
                         <div id="ap-channels-table" class="ap-channels-table"></div>
 
+                        <div id="ap-edit-channel-box" class="field" hidden>
+                            <label>EDIT MESSAGE — CHANNEL <span id="ap-edit-channel-id"></span></label>
+                            <div style="display: grid; gap: 8px;">
+                                <textarea id="ap-edit-message" placeholder="Pesan baru untuk channel ini..." rows="4" style="resize: vertical; width: 100%;"></textarea>
+                                <div class="form-actions">
+                                    <button type="button" id="ap-save-edit" class="btn btn-primary">SIMPAN MESSAGE</button>
+                                    <button type="button" id="ap-cancel-edit" class="btn btn-ghost">BATAL</button>
+                                </div>
+                                <p id="ap-edit-status" class="status-msg"></p>
+                            </div>
+                        </div>
+
                         <div class="field">
                             <label>TAMBAH CHANNEL BARU</label>
                             <div class="ac-add-grid" style="grid-template-columns: 2fr 3fr 1fr 1fr 1fr 1fr auto; gap: 8px;">

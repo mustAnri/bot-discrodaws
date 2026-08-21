@@ -28,6 +28,7 @@ const engine = require("./engine");
 const {
     buildPanel,
     buildRemoveChannelSelect,
+    buildEditChannelSelect,
     formatInterval,
     botAvatar
 } = require("./builders");
@@ -148,6 +149,48 @@ function showAddChannelModal(interaction) {
     return interaction.showModal(modal);
 }
 
+// ─── Modal: edit channel message ────────────────────────────────────────────
+
+/**
+ * Modal edit message untuk channel yang sudah ada. Dipanggil dari select menu
+ * `ap_edit_select`. Channel ID di-prefill (jangan diubah), message diisi
+ * dengan pesan yang tersimpan saat ini.
+ */
+function showEditChannelModal(interaction, channelId) {
+    const chId = new TextInputBuilder()
+        .setCustomId("edit_ch_id")
+        .setLabel("Channel ID (do not change)")
+        .setStyle(TextInputStyle.Short)
+        .setValue(channelId)
+        .setMinLength(17)
+        .setMaxLength(25)
+        .setRequired(true);
+
+    const config = store.getUserConfig(interaction.user.id);
+    const channel = config.channels.find((ch) => ch.id === channelId);
+    const currentMessage = channel ? channel.message : "";
+
+    const chMessage = new TextInputBuilder()
+        .setCustomId("edit_ch_message")
+        .setLabel("New Message Content")
+        .setStyle(TextInputStyle.Paragraph)
+        .setPlaceholder("Message to post repeatedly…")
+        .setValue(currentMessage.slice(0, 1000))
+        .setMinLength(1)
+        .setMaxLength(1000)
+        .setRequired(true);
+
+    const modal = new ModalBuilder()
+        .setCustomId("ap_edit_channel_modal")
+        .setTitle("Edit AutoPost Message")
+        .addComponents(
+            new ActionRowBuilder().addComponents(chId),
+            new ActionRowBuilder().addComponents(chMessage),
+        );
+
+    return interaction.showModal(modal);
+}
+
 // ─── Button handlers ────────────────────────────────────────────────────────
 
 /**
@@ -249,6 +292,39 @@ async function handleRemoveChannelFlow(client, interaction) {
     });
 }
 
+async function handleEditChannelFlow(client, interaction) {
+    const userId = interaction.user.id;
+    const selectRow = buildEditChannelSelect(userId);
+
+    if (!selectRow) {
+        return interaction.update({
+            flags: MessageFlags.IsComponentsV2,
+            components: panelWithNote(client, userId, {
+                accent: 0xfee75c,
+                title: "⚠️ **No Channels**",
+                lines: ["> There are no channels to edit."],
+            }),
+        });
+    }
+
+    // Panel V2 tidak boleh campur ActionRow biasa — edit panel jadi instruksi,
+    // lalu kirim select menu sebagai follow-up ephemeral.
+    await interaction.update({
+        flags: MessageFlags.IsComponentsV2,
+        components: panelWithNote(client, userId, {
+            accent: 0x5865f2,
+            title: "✏️ **Edit Message**",
+            lines: ["> Pick a channel from the select menu sent below."],
+        }),
+    });
+
+    await interaction.followUp({
+        flags: MessageFlags.Ephemeral,
+        content: "✏️ Select a channel to edit its message:",
+        components: [selectRow],
+    });
+}
+
 async function handleBackToPanel(client, interaction) {
     const userId = interaction.user.id;
     return interaction.update({
@@ -320,6 +396,15 @@ async function handleRemoveSelect(client, interaction) {
     });
 }
 
+/**
+ * Select menu edit — langsung buka modal dengan pesan saat ini ter-prefill.
+ * showModal menyelesaikan interaksi ini tanpa perlu mengedit pesan select.
+ */
+async function handleEditSelect(interaction) {
+    const channelId = interaction.values[0];
+    return showEditChannelModal(interaction, channelId);
+}
+
 // ─── Modal handlers ─────────────────────────────────────────────────────────
 
 async function handleAddChannelModal(client, interaction) {
@@ -367,6 +452,52 @@ async function handleAddChannelModal(client, interaction) {
             title: "✅ **Channel Added**",
             lines: [
                 `> 📻 Channel: <#${channelId}>\n> ⏱️ Interval: every \`${formatInterval(interval)}\`\n> 💬 Message: "${preview}"`,
+            ],
+        }),
+    });
+}
+
+async function handleEditChannelModal(client, interaction) {
+    const userId = interaction.user.id;
+
+    const channelId = interaction.fields.getTextInputValue("edit_ch_id").trim();
+    const message = interaction.fields.getTextInputValue("edit_ch_message").trim();
+
+    if (!message) {
+        return interaction.update({
+            flags: MessageFlags.IsComponentsV2,
+            components: panelWithNote(client, userId, {
+                accent: 0xed4245,
+                title: "❌ **Empty Message**",
+                lines: ["> Message content cannot be empty."],
+            }),
+        });
+    }
+
+    // Mutasi in-place → loop AutoPost yang sedang berjalan langsung pakai
+    // pesan baru pada iterasi berikutnya.
+    const updated = store.updateChannel(userId, channelId, { message });
+
+    if (!updated) {
+        return interaction.update({
+            flags: MessageFlags.IsComponentsV2,
+            components: panelWithNote(client, userId, {
+                accent: 0xfee75c,
+                title: "⚠️ **Not Found**",
+                lines: [`> Channel \`${channelId}\` was not found in your config.`],
+            }),
+        });
+    }
+
+    const preview = message.length > 100 ? `${message.slice(0, 100)}…` : message;
+
+    return interaction.update({
+        flags: MessageFlags.IsComponentsV2,
+        components: panelWithNote(client, userId, {
+            accent: 0x57f287,
+            title: "✅ **Message Updated**",
+            lines: [
+                `> 📻 Channel: <#${channelId}>\n> 💬 New message: "${preview}"`,
             ],
         }),
     });
@@ -448,6 +579,8 @@ async function handleAutoPostInteraction(client, interaction) {
                     return await handleTogglePost(client, interaction);
                 case "ap_remove_channel":
                     return await handleRemoveChannelFlow(client, interaction);
+                case "ap_edit_channel":
+                    return await handleEditChannelFlow(client, interaction);
                 case "ap_back_to_panel":
                     return await handleBackToPanel(client, interaction);
                 case "ap_close_room":
@@ -462,6 +595,9 @@ async function handleAutoPostInteraction(client, interaction) {
             if (interaction.customId === "ap_remove_select") {
                 return await handleRemoveSelect(client, interaction);
             }
+            if (interaction.customId === "ap_edit_select") {
+                return await handleEditSelect(interaction);
+            }
             return;
         }
 
@@ -472,6 +608,8 @@ async function handleAutoPostInteraction(client, interaction) {
                     return await handleAddChannelModal(client, interaction);
                 case "ap_set_token_modal":
                     return await handleSetTokenModal(client, interaction);
+                case "ap_edit_channel_modal":
+                    return await handleEditChannelModal(client, interaction);
                 default:
                     return;
             }

@@ -126,6 +126,30 @@ function addChannel(userId, channelData) {
 }
 
 /**
+ * Update field channel yang sudah ada (mutasi in-place pada objek channel).
+ * Mutasi in-place disengaja: loop engine yang sedang berjalan memegang
+ * referensi objek channel yang sama dan membaca ulang `ch.message` tiap
+ * iterasi, sehingga pesan baru langsung dipakai tanpa restart AutoPost.
+ * @param {string} userId
+ * @param {string} channelId
+ * @param {{message?: string, interval?: number}} partial
+ * @returns {boolean} false jika channel tidak ditemukan
+ */
+function updateChannel(userId, channelId, partial = {}) {
+    const config = getUserConfig(userId);
+    const channel = config.channels.find((ch) => ch.id === channelId);
+    if (!channel) return false;
+    if (typeof partial.message === "string" && partial.message.trim() !== "") {
+        channel.message = partial.message;
+    }
+    if (typeof partial.interval === "number" && Number.isFinite(partial.interval) && partial.interval > 0) {
+        channel.interval = partial.interval;
+    }
+    saveStore();
+    return true;
+}
+
+/**
  * Hapus channel dari config user.
  * @param {string} userId
  * @param {string} channelId
@@ -254,6 +278,7 @@ module.exports = {
     peekUserConfig,
     setUserConfig,
     addChannel,
+    updateChannel,
     removeChannel,
     setUsername,
     getAllUserIds,

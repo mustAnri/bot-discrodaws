@@ -162,6 +162,17 @@ function buildPanel(userId, client) {
                 .setStyle(ButtonStyle.Primary),
         );
 
+    const editMessageSection = new SectionBuilder()
+        .addTextDisplayComponents(
+            new TextDisplayBuilder().setContent("✏️ **Edit Message**"),
+        )
+        .setButtonAccessory(
+            new ButtonBuilder()
+                .setCustomId("ap_edit_channel")
+                .setLabel("Edit Message")
+                .setStyle(ButtonStyle.Secondary),
+        );
+
     const removeSection = new SectionBuilder()
         .addTextDisplayComponents(
             new TextDisplayBuilder().setContent("🗑️ **Remove Channel**"),
@@ -225,7 +236,7 @@ function buildPanel(userId, client) {
             new TextDisplayBuilder().setContent(channelListText),
         )
         .addSeparatorComponents(sep())
-        .addSectionComponents(toggleSection, addChannelSection, removeSection)
+        .addSectionComponents(toggleSection, addChannelSection, editMessageSection, removeSection)
         .addSeparatorComponents(sep())
         .addSectionComponents(setTokenSection, ...roomSections)
         .addSeparatorComponents(sep())
@@ -254,10 +265,31 @@ function buildRemoveChannelSelect(userId) {
     return new ActionRowBuilder().addComponents(select);
 }
 
+// ─── Edit-channel select menu ───────────────────────────────────────────────
+
+function buildEditChannelSelect(userId) {
+    const config = store.getUserConfig(userId);
+    if (config.channels.length === 0) return null;
+
+    const select = new StringSelectMenuBuilder()
+        .setCustomId("ap_edit_select")
+        .setPlaceholder("Select a channel to edit…")
+        .addOptions(
+            config.channels.map((ch) => ({
+                label: `Channel ${ch.id}`,
+                description: `Every ${formatInterval(ch.interval)}`,
+                value: ch.id,
+            })),
+        );
+
+    return new ActionRowBuilder().addComponents(select);
+}
+
 module.exports = {
     buildPanel,
     buildEntryContainer,
     buildRemoveChannelSelect,
+    buildEditChannelSelect,
     formatInterval,
     botAvatar,
     bannerUrl
