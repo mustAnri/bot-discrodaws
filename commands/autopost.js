@@ -1,34 +1,24 @@
 /**
  * commands/autopost.js
  *
- * /autopost [channel] — pasang panel publik AutoPost di channel target.
+ * /autopost [channel] — pasang panel entry AutoPost di channel target.
  * Jika opsi channel tidak diisi, panel dipasang di channel tempat command dijalankan.
+ * Satu panel untuk semua orang: tiap member menekan tombol untuk membuka panel
+ * pribadinya sendiri secara ephemeral (hanya dia yang bisa melihatnya).
  * Setup: owner guild, atau member dengan role setup (settings.setupRoleId).
- * Pemakaian panel (tombol) diatur whitelist role di interactions.js.
  */
 
 const {
-    ActionRowBuilder,
-    ButtonBuilder,
-    ButtonStyle,
-    ContainerBuilder,
-    MediaGalleryBuilder,
-    MediaGalleryItemBuilder,
     MessageFlags,
-    PermissionFlagsBits,
-    SectionBuilder,
-    SeparatorBuilder,
-    SeparatorSpacingSize,
-    TextDisplayBuilder,
-    ThumbnailBuilder
+    PermissionFlagsBits
 } = require("discord.js");
 
-const { botAvatar, bannerUrl } = require("../admin/autopost/builders");
+const { buildEntryContainer } = require("../admin/autopost/builders");
 const store = require("../Data/autopostStore");
 
 module.exports = {
     name: "autopost",
-    description: "Buka panel AutoPost",
+    description: "Pasang panel AutoPost",
 
     async execute(interaction) {
         const client = interaction.client;
@@ -77,43 +67,11 @@ module.exports = {
 
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-        const banner = new MediaGalleryBuilder().addItems(
-            new MediaGalleryItemBuilder().setURL(bannerUrl(client))
-        );
-        const thumbnail = new ThumbnailBuilder({
-            media: { url: botAvatar(client, 128) }
-        });
-
-        const roomSection = new SectionBuilder()
-            .addTextDisplayComponents(
-                new TextDisplayBuilder().setContent("🏠 **AutoPost Private Rooms**"),
-                new TextDisplayBuilder().setContent(
-                    "> Create your own private room to configure AutoPost channels, token, and posting schedule.\n> Only you can see and manage your room."
-                )
-            )
-            .setThumbnailAccessory(thumbnail);
-
-        const createRoomButton = new ButtonBuilder()
-            .setCustomId("ap_public_create_room")
-            .setLabel("🔒 Create Private Room")
-            .setStyle(ButtonStyle.Success);
-
-        const publicContainer = new ContainerBuilder()
-            .setAccentColor(0x5865f2)
-            .addMediaGalleryComponents(banner)
-            .addSeparatorComponents(
-                new SeparatorBuilder()
-                    .setDivider(true)
-                    .setSpacing(SeparatorSpacingSize.Small)
-            )
-            .addSectionComponents(roomSection)
-            .addActionRowComponents(
-                new ActionRowBuilder().addComponents(createRoomButton)
-            );
+        const { container } = buildEntryContainer(client);
 
         await targetChannel.send({
             flags: MessageFlags.IsComponentsV2,
-            components: [publicContainer]
+            components: [container]
         });
 
         return interaction.editReply({

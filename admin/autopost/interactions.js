@@ -1,9 +1,10 @@
 /**
  * admin/autopost/interactions.js
  *
- * Router interaksi AutoPost (port gabungan dari anri autopost-interactions.js
- * + autopost-modals.js). AutoLogin DIHAPUS total — semua handler ap_al_* tidak
- * di-port, token field = config.token biasa.
+ * Router interaksi AutoPost. Panel pribadi tiap user dibuka secara EPHEMERAL
+ * (hanya user yang bersangkutan yang bisa lihat) dari satu panel entry publik.
+ * Tidak ada lagi private room/channel — sistem room dihapus, tapi sisa data
+ * room lama tetap bisa dibersihkan via tombol "Hapus Room" kondisional.
  *
  * Semua customId memakai prefix "ap_" (routing dari index.js).
  */
@@ -12,11 +13,9 @@ const {
     ActionRowBuilder,
     ButtonBuilder,
     ButtonStyle,
-    ChannelType,
     ContainerBuilder,
     MessageFlags,
     ModalBuilder,
-    PermissionFlagsBits,
     SectionBuilder,
     TextDisplayBuilder,
     TextInputBuilder,
@@ -28,20 +27,19 @@ const store = require("../../Data/autopostStore");
 const engine = require("./engine");
 const {
     buildPanel,
-    buildWelcomeContainer,
     buildRemoveChannelSelect,
     formatInterval,
     botAvatar
 } = require("./builders");
 
-// ─── Feedback container kecil (pola anri) ───────────────────────────────────
+// ─── Feedback container kecil ───────────────────────────────────────────────
 
 function thumb(client) {
     return new ThumbnailBuilder({ media: { url: botAvatar(client, 128) } });
 }
 
 /**
- * Container feedback sederhana: judul + 2-3 baris teks + thumbnail.
+ * Container feedback sederhana: judul + baris teks + thumbnail.
  * @param {object} client
  * @param {number} accent warna aksen hex
  * @param {string} title
@@ -62,6 +60,16 @@ function infoContainer(client, accent, title, lines) {
     return new ContainerBuilder()
         .setAccentColor(accent)
         .addSectionComponents(section);
+}
+
+/**
+ * Susun components V2: catatan kecil (opsional) + panel terbaru.
+ * Dipakai setiap kali ada perubahan config supaya panel langsung ter-refresh.
+ */
+function panelWithNote(client, userId, note) {
+    const { container: panelContainer } = buildPanel(userId, client);
+    if (!note) return [panelContainer];
+    return [infoContainer(client, note.accent, note.title, note.lines), panelContainer];
 }
 
 // ─── Modal: set token ───────────────────────────────────────────────────────
@@ -140,33 +148,23 @@ function showAddChannelModal(interaction) {
     return interaction.showModal(modal);
 }
 
-// ─── Refresh panel di private room ──────────────────────────────────────────
-
-async function refreshUserPanel(client, userId) {
-    try {
-        const room = store.getUserRoom(userId);
-        if (!room) return;
-
-        const channel = await client.channels.fetch(room.channelId).catch(() => null);
-        if (!channel) return;
-        if (!room.panelMessageId) return;
-
-        const msg = await channel.messages.fetch(room.panelMessageId).catch(() => null);
-        if (!msg) return;
-
-        const { container: welcomeContainer } = buildWelcomeContainer(client, userId);
-        const { container: panelContainer } = buildPanel(userId, client);
-
-        await msg.edit({
-            flags: MessageFlags.IsComponentsV2,
-            components: [welcomeContainer, panelContainer]
-        });
-    } catch (err) {
-        console.error("[AUTOPOST] refreshUserPanel error:", err.message);
-    }
-}
-
 // ─── Button handlers ────────────────────────────────────────────────────────
+
+/**
+ * Buka panel pribadi secara ephemeral — dipanggil dari tombol di panel entry
+ * publik. Hanya user yang menekan tombol yang bisa melihat hasilnya.
+ */
+async function handleOpenMyPanel(client, interaction) {
+    const userId = interaction.user.id;
+    store.setUsername(userId, interaction.user.username);
+
+    const components = panelWithNote(client, userId, null);
+
+    return interaction.reply({
+        flags: MessageFlags.Ephemeral | MessageFlags.IsComponentsV2,
+        components,
+    });
+}
 
 async function handleTogglePost(client, interaction) {
     const userId = interaction.user.id;
@@ -176,47 +174,45 @@ async function handleTogglePost(client, interaction) {
     if (!config.token) {
         return interaction.update({
             flags: MessageFlags.IsComponentsV2,
-            components: [
-                infoContainer(client, 0xfee75c, "⚠️ **No Token Set**", [
-                    "> Set your user token first using the **Set Token** button.",
-                ]),
-            ],
+            components: panelWithNote(client, userId, {
+                accent: 0xfee75c,
+                title: "⚠️ **No Token Set**",
+                lines: ["> Set your user token first using the **Set Token** button."],
+            }),
         });
     }
 
     if (config.channels.length === 0) {
         return interaction.update({
             flags: MessageFlags.IsComponentsV2,
-            components: [
-                infoContainer(client, 0xfee75c, "⚠️ **No Channels**", [
-                    "> Add at least one channel before starting AutoPost.",
-                ]),
-            ],
+            components: panelWithNote(client, userId, {
+                accent: 0xfee75c,
+                title: "⚠️ **No Channels**",
+                lines: ["> Add at least one channel before starting AutoPost."],
+            }),
         });
     }
 
     if (engine.isAutoPostActive(userId)) {
         engine.stopAutoPost(userId);
-        await refreshUserPanel(client, userId);
         return interaction.update({
             flags: MessageFlags.IsComponentsV2,
-            components: [
-                infoContainer(client, 0xed4245, "⏹️ **AutoPost Stopped**", [
-                    "> All posting loops have been stopped.",
-                ]),
-            ],
+            components: panelWithNote(client, userId, {
+                accent: 0xed4245,
+                title: "⏹️ **AutoPost Stopped**",
+                lines: ["> All posting loops have been stopped."],
+            }),
         });
     }
 
     engine.startAutoPost(userId);
-    await refreshUserPanel(client, userId);
     return interaction.update({
         flags: MessageFlags.IsComponentsV2,
-        components: [
-            infoContainer(client, 0x57f287, "▶️ **AutoPost Started**", [
-                `> Posting to **${config.channels.length}** channel(s).`,
-            ]),
-        ],
+        components: panelWithNote(client, userId, {
+            accent: 0x57f287,
+            title: "▶️ **AutoPost Started**",
+            lines: [`> Posting to **${config.channels.length}** channel(s).`],
+        }),
     });
 }
 
@@ -227,26 +223,27 @@ async function handleRemoveChannelFlow(client, interaction) {
     if (!selectRow) {
         return interaction.update({
             flags: MessageFlags.IsComponentsV2,
-            components: [
-                infoContainer(client, 0xfee75c, "⚠️ **No Channels**", [
-                    "> There are no channels to remove.",
-                ]),
-            ],
+            components: panelWithNote(client, userId, {
+                accent: 0xfee75c,
+                title: "⚠️ **No Channels**",
+                lines: ["> There are no channels to remove."],
+            }),
         });
     }
 
     // Panel V2 tidak boleh campur ActionRow biasa — edit panel jadi instruksi,
-    // lalu kirim select menu sebagai pesan baru di channel yang sama.
+    // lalu kirim select menu sebagai follow-up ephemeral.
     await interaction.update({
         flags: MessageFlags.IsComponentsV2,
-        components: [
-            infoContainer(client, 0x5865f2, "🗑️ **Remove Channel**", [
-                "> Pick a channel from the select menu sent below.",
-            ]),
-        ],
+        components: panelWithNote(client, userId, {
+            accent: 0x5865f2,
+            title: "🗑️ **Remove Channel**",
+            lines: ["> Pick a channel from the select menu sent below."],
+        }),
     });
 
-    await interaction.channel.send({
+    await interaction.followUp({
+        flags: MessageFlags.Ephemeral,
         content: "🗑️ Select a channel to remove:",
         components: [selectRow],
     });
@@ -254,39 +251,36 @@ async function handleRemoveChannelFlow(client, interaction) {
 
 async function handleBackToPanel(client, interaction) {
     const userId = interaction.user.id;
-    const { container } = buildPanel(userId, client);
     return interaction.update({
         flags: MessageFlags.IsComponentsV2,
-        components: [container],
+        components: panelWithNote(client, userId, null),
     });
 }
 
-async function handleOpenPanel(client, interaction) {
-    const userId = interaction.user.id;
-    const { container: welcomeContainer } = buildWelcomeContainer(client, userId);
-    const { container: panelContainer } = buildPanel(userId, client);
-    return interaction.update({
-        flags: MessageFlags.IsComponentsV2,
-        components: [welcomeContainer, panelContainer],
-    });
-}
-
+/**
+ * Cleanup room lama (sistem room sudah dihapus). Menghapus channel room jika
+ * masih ada, lalu menghapus entry room dari store.
+ */
 async function handleCloseRoom(client, interaction) {
     const userId = interaction.user.id;
     const room = store.getUserRoom(userId);
 
     if (!room) {
-        return interaction.reply({
-            content: "❌ You don't have an active private room.",
-            flags: MessageFlags.Ephemeral,
+        return interaction.update({
+            flags: MessageFlags.IsComponentsV2,
+            components: panelWithNote(client, userId, {
+                accent: 0xfee75c,
+                title: "ℹ️ **No Room**",
+                lines: ["> You don't have an active private room."],
+            }),
         });
     }
 
-    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    await interaction.deferUpdate();
 
     try {
         const channel = await client.channels.fetch(room.channelId).catch(() => null);
-        if (channel) await channel.delete("AutoPost room closed by user");
+        if (channel) await channel.delete("AutoPost room cleanup by user");
     } catch (err) {
         console.error("[AUTOPOST] close room delete channel error:", err.message);
     }
@@ -295,165 +289,12 @@ async function handleCloseRoom(client, interaction) {
 
     return interaction.editReply({
         flags: MessageFlags.IsComponentsV2,
-        components: [
-            infoContainer(client, 0xed4245, "🔒 **Room Closed**", [
-                "> Your private room has been deleted.",
-            ]),
-        ],
+        components: panelWithNote(client, userId, {
+            accent: 0xed4245,
+            title: "🧹 **Room Deleted**",
+            lines: ["> Your old private room has been removed."],
+        }),
     });
-}
-
-// ─── Create private room ────────────────────────────────────────────────────
-
-const ROOM_CATEGORY_NAME = "🔒 AutoPost Rooms";
-
-async function handleCreateRoom(client, interaction) {
-    const userId = interaction.user.id;
-    const guild = interaction.guild;
-
-    if (!guild) {
-        return interaction.reply({
-            content: "❌ This button only works inside a server.",
-            flags: MessageFlags.Ephemeral,
-        });
-    }
-
-    store.setUsername(userId, interaction.user.username);
-
-    // Cek room yang sudah ada di store
-    const existingRoom = store.getUserRoom(userId);
-    if (existingRoom) {
-        const existingChannel = await client.channels
-            .fetch(existingRoom.channelId)
-            .catch(() => null);
-
-        if (existingChannel) {
-            return interaction.reply({
-                flags: MessageFlags.IsComponentsV2,
-                components: [
-                    infoContainer(client, 0xfee75c, "⚠️ **Room Already Exists**", [
-                        `> You already have a private room: <#${existingRoom.channelId}>`,
-                    ]),
-                ],
-            });
-        }
-        // Channel hilang tapi store masih ada → bersihkan entry usang
-        store.deletePrivateRoom(existingRoom.roomId);
-    }
-
-    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-
-    try {
-        const allChannels = await guild.channels.fetch();
-
-        // Cari category AutoPost Rooms
-        let category = allChannels.find(
-            (ch) => ch && ch.type === ChannelType.GuildCategory && ch.name === ROOM_CATEGORY_NAME,
-        );
-
-        if (!category) {
-            category = await guild.channels.create({
-                name: ROOM_CATEGORY_NAME,
-                type: ChannelType.GuildCategory,
-                permissionOverwrites: [
-                    {
-                        id: guild.roles.everyone.id,
-                        deny: [PermissionFlagsBits.ViewChannel],
-                    },
-                ],
-            });
-        }
-
-        // Cari channel autopost-<username> yang sudah ada di category tsb
-        const wantedName = `autopost-${interaction.user.username}`.toLowerCase();
-        let channel = allChannels.find(
-            (ch) =>
-                ch &&
-                ch.type === ChannelType.GuildText &&
-                ch.parentId === category.id &&
-                ch.name.toLowerCase() === wantedName,
-        );
-
-        if (!channel) {
-            channel = await guild.channels.create({
-                name: wantedName,
-                type: ChannelType.GuildText,
-                parent: category.id,
-                permissionOverwrites: [
-                    {
-                        id: guild.roles.everyone.id,
-                        deny: [PermissionFlagsBits.ViewChannel],
-                    },
-                    {
-                        id: userId,
-                        allow: [
-                            PermissionFlagsBits.ViewChannel,
-                            PermissionFlagsBits.SendMessages,
-                            PermissionFlagsBits.ReadMessageHistory,
-                        ],
-                    },
-                    {
-                        id: client.user.id,
-                        allow: [
-                            PermissionFlagsBits.ViewChannel,
-                            PermissionFlagsBits.SendMessages,
-                            PermissionFlagsBits.ReadMessageHistory,
-                            PermissionFlagsBits.ManageChannels,
-                        ],
-                    },
-                ],
-            });
-        }
-
-        const roomId = `${userId}-${Date.now()}`;
-        store.createPrivateRoom(userId, roomId, channel.id, guild.id);
-
-        const { container: welcomeContainer } = buildWelcomeContainer(client, userId);
-        const { container: panelContainer } = buildPanel(userId, client);
-
-        const sentMsg = await channel.send({
-            flags: MessageFlags.IsComponentsV2,
-            components: [welcomeContainer, panelContainer],
-        });
-
-        store.setPanelMessageId(roomId, sentMsg.id);
-
-        const openButton = new ButtonBuilder()
-            .setLabel("Open Room")
-            .setStyle(ButtonStyle.Link)
-            .setURL(channel.url);
-
-        const closeButton = new ButtonBuilder()
-            .setCustomId("ap_close_room")
-            .setLabel("Close Room")
-            .setStyle(ButtonStyle.Danger);
-
-        return interaction.editReply({
-            flags: MessageFlags.IsComponentsV2,
-            components: [
-                new ContainerBuilder()
-                    .setAccentColor(0x57f287)
-                    .addSectionComponents(
-                        new SectionBuilder()
-                            .addTextDisplayComponents(
-                                new TextDisplayBuilder().setContent("🔒 **Room Created**"),
-                                new TextDisplayBuilder().setContent(
-                                    `> Your private room is ready: <#${channel.id}>`,
-                                ),
-                            )
-                            .setThumbnailAccessory(thumb(client)),
-                    )
-                    .addActionRowComponents(
-                        new ActionRowBuilder().addComponents(openButton, closeButton),
-                    ),
-            ],
-        });
-    } catch (err) {
-        console.error("[AUTOPOST] create room error:", err);
-        return interaction.editReply({
-            content: "❌ Failed to create private room. Check bot permissions.",
-        });
-    }
 }
 
 // ─── Select menu handler ────────────────────────────────────────────────────
@@ -464,25 +305,18 @@ async function handleRemoveSelect(client, interaction) {
 
     const removed = store.removeChannel(userId, channelId);
 
-    // Hapus pesan select menu agar tidak menumpuk
-    await interaction.message.delete().catch(() => {});
-
-    await refreshUserPanel(client, userId);
-
-    return interaction.reply({
+    // Edit pesan select (ephemeral) jadi konfirmasi + panel terbaru.
+    return interaction.update({
         flags: MessageFlags.IsComponentsV2,
-        components: [
-            infoContainer(
-                client,
-                removed ? 0x57f287 : 0xfee75c,
-                removed ? "✅ **Channel Removed**" : "⚠️ **Not Found**",
-                [
-                    removed
-                        ? `> Channel \`${channelId}\` has been removed from your config.`
-                        : "> That channel was not found in your config.",
-                ],
-            ),
-        ],
+        components: panelWithNote(client, userId, {
+            accent: removed ? 0x57f287 : 0xfee75c,
+            title: removed ? "✅ **Channel Removed**" : "⚠️ **Not Found**",
+            lines: [
+                removed
+                    ? `> Channel \`${channelId}\` has been removed from your config.`
+                    : "> That channel was not found in your config.",
+            ],
+        }),
     });
 }
 
@@ -500,57 +334,41 @@ async function handleAddChannelModal(client, interaction) {
     const interval = hours * 3600 + minutes * 60 + seconds;
 
     if (interval <= 0) {
-        return interaction.reply({
+        return interaction.update({
             flags: MessageFlags.IsComponentsV2,
-            components: [
-                infoContainer(client, 0xed4245, "❌ **Invalid Interval**", [
-                    "> Total interval must be greater than 0 seconds.",
-                ]),
-            ],
+            components: panelWithNote(client, userId, {
+                accent: 0xed4245,
+                title: "❌ **Invalid Interval**",
+                lines: ["> Total interval must be greater than 0 seconds."],
+            }),
         });
     }
 
     const added = store.addChannel(userId, { id: channelId, message, interval });
 
     if (!added) {
-        return interaction.reply({
+        return interaction.update({
             flags: MessageFlags.IsComponentsV2,
-            components: [
-                infoContainer(client, 0xfee75c, "⚠️ **Duplicate Channel**", [
-                    `> Channel \`${channelId}\` is already in your config.`,
-                ]),
-            ],
+            components: panelWithNote(client, userId, {
+                accent: 0xfee75c,
+                title: "⚠️ **Duplicate Channel**",
+                lines: [`> Channel \`${channelId}\` is already in your config.`],
+            }),
         });
     }
 
-    await refreshUserPanel(client, userId);
-
     const preview = message.length > 100 ? `${message.slice(0, 100)}…` : message;
 
-    const backRow = new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-            .setCustomId("ap_back_to_panel")
-            .setLabel("Back to Panel")
-            .setStyle(ButtonStyle.Primary),
-    );
-
-    return interaction.reply({
+    // update() pada modal submission = edit pesan panel ephemeral asalnya.
+    return interaction.update({
         flags: MessageFlags.IsComponentsV2,
-        components: [
-            new ContainerBuilder()
-                .setAccentColor(0x57f287)
-                .addSectionComponents(
-                    new SectionBuilder()
-                        .addTextDisplayComponents(
-                            new TextDisplayBuilder().setContent("✅ **Channel Added**"),
-                            new TextDisplayBuilder().setContent(
-                                `> 📻 Channel: <#${channelId}>\n> ⏱️ Interval: every \`${formatInterval(interval)}\`\n> 💬 Message: "${preview}"`,
-                            ),
-                        )
-                        .setThumbnailAccessory(thumb(client)),
-                )
-                .addActionRowComponents(backRow),
-        ],
+        components: panelWithNote(client, userId, {
+            accent: 0x57f287,
+            title: "✅ **Channel Added**",
+            lines: [
+                `> 📻 Channel: <#${channelId}>\n> ⏱️ Interval: every \`${formatInterval(interval)}\`\n> 💬 Message: "${preview}"`,
+            ],
+        }),
     });
 }
 
@@ -561,27 +379,13 @@ async function handleSetTokenModal(client, interaction) {
     store.setUserConfig(userId, { token });
     store.setUsername(userId, interaction.user.username);
 
-    await refreshUserPanel(client, userId);
-
-    const { container } = buildPanel(userId, client);
-
-    return interaction.reply({
+    return interaction.update({
         flags: MessageFlags.IsComponentsV2,
-        components: [
-            new ContainerBuilder()
-                .setAccentColor(0x57f287)
-                .addSectionComponents(
-                    new SectionBuilder()
-                        .addTextDisplayComponents(
-                            new TextDisplayBuilder().setContent("✅ **Token Saved**"),
-                            new TextDisplayBuilder().setContent(
-                                "> Your user token has been updated. Panel refreshed below.",
-                            ),
-                        )
-                        .setThumbnailAccessory(thumb(client)),
-                ),
-            container,
-        ],
+        components: panelWithNote(client, userId, {
+            accent: 0x57f287,
+            title: "✅ **Token Saved**",
+            lines: ["> Your user token has been updated."],
+        }),
     });
 }
 
@@ -628,6 +432,14 @@ async function handleAutoPostInteraction(client, interaction) {
         // ── Buttons ──────────────────────────────────────────────────────
         if (interaction.isButton()) {
             switch (interaction.customId) {
+                // CustomId lama (ap_open_panel, ap_create_room,
+                // ap_public_create_room) tetap diarahkan ke panel ephemeral
+                // supaya panel lama yang sudah terpasang tidak mati.
+                case "ap_open_my_panel":
+                case "ap_open_panel":
+                case "ap_create_room":
+                case "ap_public_create_room":
+                    return await handleOpenMyPanel(client, interaction);
                 case "ap_set_token":
                     return await showSetTokenModal(interaction);
                 case "ap_add_channel":
@@ -638,11 +450,6 @@ async function handleAutoPostInteraction(client, interaction) {
                     return await handleRemoveChannelFlow(client, interaction);
                 case "ap_back_to_panel":
                     return await handleBackToPanel(client, interaction);
-                case "ap_open_panel":
-                    return await handleOpenPanel(client, interaction);
-                case "ap_create_room":
-                case "ap_public_create_room":
-                    return await handleCreateRoom(client, interaction);
                 case "ap_close_room":
                     return await handleCloseRoom(client, interaction);
                 default:

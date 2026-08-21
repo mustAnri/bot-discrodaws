@@ -1065,6 +1065,7 @@
                             <button class="btn btn-ghost btn-sm" data-action="ap-view" data-user-id="${escapeHtml(u.userId)}" data-username="${escapeHtml(u.username)}">View</button>
                             <button class="btn btn-primary btn-sm" data-action="ap-start" data-user-id="${escapeHtml(u.userId)}" ${u.running ? "disabled" : ""}>Start</button>
                             <button class="btn btn-danger btn-sm" data-action="ap-stop" data-user-id="${escapeHtml(u.userId)}" ${!u.running ? "disabled" : ""}>Stop</button>
+                            <button class="btn btn-danger btn-sm" data-action="ap-delete" data-user-id="${escapeHtml(u.userId)}" data-username="${escapeHtml(u.username)}">🗑 Hapus</button>
                         </div>
                     </td>
                 </tr>
@@ -1104,8 +1105,23 @@
             await apControlUser(userId, "start");
         } else if (action === "ap-stop") {
             await apControlUser(userId, "stop");
+        } else if (action === "ap-delete") {
+            await apDeleteUser(userId, username);
         }
     });
+
+    async function apDeleteUser(userId, username) {
+        if (!confirm(`Hapus user "${username}" dari AutoPost?\nSemua data (token, channel, room lama) akan dihapus permanen.`)) return;
+        try {
+            await api(`/api/autopost/users/${userId}`, { method: "DELETE" });
+            showToast(`✅ User ${username} dihapus`);
+            if (apSelectedUserId === userId) closeApConfig();
+            if (activeTab === "autopost") loadApUsers();
+        } catch (err) {
+            if (err.status === 401) return showView("login");
+            showToast(err.message, "err");
+        }
+    }
 
     async function apControlUser(userId, action) {
         try {
@@ -1200,14 +1216,18 @@
             return;
         }
 
-        const rows = channels.map((ch, idx) => {
+        const rows = channels.map((ch) => {
             const interval = formatInterval(ch.interval);
             const msg = escapeHtml(ch.message || "");
             const truncated = msg.length > 60 ? msg.slice(0, 60) + "…" : msg;
+            const expandable = ch.message && ch.message.length > 60;
             return `
                 <tr>
                     <td>${escapeHtml(ch.id)}</td>
-                    <td>${truncated}</td>
+                    <td class="ap-msg-cell">
+                        <span class="ap-msg-short"${expandable ? ` style="cursor:pointer" title="Klik untuk lihat pesan lengkap"` : ""}>${truncated}</span>
+                        ${expandable ? `<pre class="ap-msg-full hidden" style="white-space:pre-wrap;margin:4px 0 0;font-size:12px;">${msg}</pre>` : ""}
+                    </td>
                     <td>${interval}</td>
                     <td>
                         <button class="btn btn-danger btn-sm" data-action="ap-remove-channel" data-channel-id="${escapeHtml(ch.id)}">Hapus</button>
@@ -1221,7 +1241,7 @@
                 <thead>
                     <tr>
                         <th>Channel ID</th>
-                        <th>Message (truncated)</th>
+                        <th>Pesan (klik untuk lihat lengkap)</th>
                         <th>Interval</th>
                         <th>Action</th>
                     </tr>
@@ -1283,8 +1303,15 @@
         }
     });
 
-    // Remove channel (event delegation)
+    // Remove channel + expand pesan (event delegation)
     el.apChannelsTable.addEventListener("click", async (e) => {
+        // Klik pesan truncated → tampilkan pesan lengkap / sembunyikan lagi
+        const msgShort = e.target.closest(".ap-msg-short");
+        if (msgShort) {
+            const full = msgShort.parentElement.querySelector(".ap-msg-full");
+            if (full) full.classList.toggle("hidden");
+            return;
+        }
         const btn = e.target.closest("button[data-action='ap-remove-channel']");
         if (!btn || !apSelectedUserId) return;
         const channelId = btn.dataset.channelId;
@@ -1300,10 +1327,10 @@
         }
     });
 
-    // Room info
+    // Legacy room info (sistem room sudah dihapus; hanya untuk cleanup sisa lama)
     function renderApRoomInfo(room) {
         if (!room || !room.channelId) {
-            el.apRoomInfo.innerHTML = `<p class="panel-desc">Belum ada room voice channel yang dikonfigurasi.</p>`;
+            el.apRoomInfo.innerHTML = `<p class="panel-desc">User ini tidak punya private room lama. Tidak ada yang perlu dibersihkan.</p>`;
             return;
         }
         // room.guildId = ID guild tempat room dibuat, room.channelId = channel private room
@@ -1311,12 +1338,12 @@
         const channelId = room.channelId;
         el.apRoomInfo.innerHTML = `
             <div class="field">
-                <label>Room Voice Channel</label>
+                <label>Private Room Lama</label>
                 <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
                     <a href="https://discord.com/channels/${guildId}/${channelId}" target="_blank" rel="noopener" class="btn btn-ghost btn-sm">
                         Buka di Discord
                     </a>
-                    <button class="btn btn-danger btn-sm" data-action="ap-close-room">Tutup Room</button>
+                    <button class="btn btn-danger btn-sm" data-action="ap-close-room">🗑 Hapus Room</button>
                 </div>
                 <small>Guild: ${escapeHtml(guildId)} • Channel: ${escapeHtml(channelId)}</small>
             </div>

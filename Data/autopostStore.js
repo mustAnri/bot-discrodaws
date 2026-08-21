@@ -136,6 +136,21 @@ function getAllUserIds() {
     return Object.keys(cache.users);
 }
 
+/**
+ * Hapus config user sepenuhnya + semua private room lama miliknya.
+ * @param {string} userId
+ * @returns {boolean} false jika user memang tidak ada
+ */
+function deleteUser(userId) {
+    if (!cache.users[userId]) return false;
+    delete cache.users[userId];
+    for (const [roomId, room] of Object.entries(cache.privateRooms)) {
+        if (room.userId === userId) delete cache.privateRooms[roomId];
+    }
+    saveStore();
+    return true;
+}
+
 // ================= PRIVATE ROOMS =================
 
 /**
@@ -222,6 +237,7 @@ module.exports = {
     removeChannel,
     setUsername,
     getAllUserIds,
+    deleteUser,
     createPrivateRoom,
     setPanelMessageId,
     getPrivateRoom,

@@ -58,41 +58,47 @@ const sep = () =>
         .setDivider(true)
         .setSpacing(SeparatorSpacingSize.Small);
 
-// ─── Welcome Container (private room) ───────────────────────────────────────
+// ─── Entry Container (panel publik, 1 untuk semua) ──────────────────────────
 
-function buildWelcomeContainer(client, userId) {
+/**
+ * Panel entry yang di-post ke channel publik via /autopost.
+ * Satu panel untuk semua orang — tiap member menekan tombol untuk membuka
+ * panel pribadinya sendiri (ephemeral, hanya dia yang bisa lihat).
+ */
+function buildEntryContainer(client) {
     const banner = new MediaGalleryBuilder().addItems(
         new MediaGalleryItemBuilder().setURL(bannerUrl(client)),
     );
     const thumbnail = new ThumbnailBuilder({ media: { url: botAvatar(client, 128) } });
 
-    const welcomeSection = new SectionBuilder()
+    const entrySection = new SectionBuilder()
         .addTextDisplayComponents(
+            new TextDisplayBuilder().setContent("⚡ **AutoPost Panel**"),
             new TextDisplayBuilder().setContent(
-                `👋 **Welcome to your Private Room, <@${userId}>!**`,
-            ),
-            new TextDisplayBuilder().setContent(
-                "Manage your AutoPost channels and token below.",
+                "> Klik tombol di bawah untuk membuka panel AutoPost pribadimu.\n> Konfigurasi tiap orang terpisah — hanya kamu yang bisa melihat panelmu sendiri.",
             ),
         )
-        .setButtonAccessory(
-            new ButtonBuilder()
-                .setCustomId("ap_open_panel")
-                .setLabel("Open AutoPost Panel")
-                .setStyle(ButtonStyle.Primary),
-        );
+        .setThumbnailAccessory(thumbnail);
 
     const tipFooter = new TextDisplayBuilder().setContent(
-        "💡 *Use the buttons below to configure channels and token.*",
+        "💡 *Set your user token first, add channels, then hit Start.*",
     );
 
     const container = new ContainerBuilder()
         .setAccentColor(0x5865f2)
         .addMediaGalleryComponents(banner)
         .addSeparatorComponents(sep())
-        .addSectionComponents(welcomeSection)
+        .addSectionComponents(entrySection)
         .addSeparatorComponents(sep())
-        .addTextDisplayComponents(tipFooter);
+        .addTextDisplayComponents(tipFooter)
+        .addActionRowComponents(
+            new ActionRowBuilder().addComponents(
+                new ButtonBuilder()
+                    .setCustomId("ap_open_my_panel")
+                    .setLabel("📂 Buka Panel Saya")
+                    .setStyle(ButtonStyle.Primary),
+            ),
+        );
 
     return { container };
 }
@@ -179,20 +185,30 @@ function buildPanel(userId, client) {
                 .setStyle(hasToken ? ButtonStyle.Secondary : ButtonStyle.Danger),
         );
 
-    const createRoomSection = new SectionBuilder()
-        .addTextDisplayComponents(
-            new TextDisplayBuilder().setContent("🔒 **Private Room**"),
-        )
-        .setButtonAccessory(
-            new ButtonBuilder()
-                .setCustomId("ap_create_room")
-                .setLabel("Create Room")
-                .setStyle(ButtonStyle.Success),
+    // ── Legacy room cleanup (muncul hanya jika user masih punya room lama) ──
+    const legacyRoom = store.getUserRoom(userId);
+    const roomSections = [];
+    if (legacyRoom) {
+        roomSections.push(
+            new SectionBuilder()
+                .addTextDisplayComponents(
+                    new TextDisplayBuilder().setContent("🧹 **Cleanup Room Lama**"),
+                    new TextDisplayBuilder().setContent(
+                        `> Kamu masih punya private room lama <#${legacyRoom.channelId}>. Hapus di sini.`,
+                    ),
+                )
+                .setButtonAccessory(
+                    new ButtonBuilder()
+                        .setCustomId("ap_close_room")
+                        .setLabel("Hapus Room")
+                        .setStyle(ButtonStyle.Danger),
+                ),
         );
+    }
 
     // ── Footer tip ────────────────────────────────────────────────────────
     const footerTip = new TextDisplayBuilder().setContent(
-        "💡 *Set your user token first, add channels, then hit Start.*",
+        "💡 *Panel ini hanya kamu yang bisa lihat. Konfigurasi tersimpan per-user.*",
     );
 
     // ── Assemble ──────────────────────────────────────────────────────────
@@ -211,7 +227,7 @@ function buildPanel(userId, client) {
         .addSeparatorComponents(sep())
         .addSectionComponents(toggleSection, addChannelSection, removeSection)
         .addSeparatorComponents(sep())
-        .addSectionComponents(setTokenSection, createRoomSection)
+        .addSectionComponents(setTokenSection, ...roomSections)
         .addSeparatorComponents(sep())
         .addTextDisplayComponents(footerTip);
 
@@ -240,7 +256,7 @@ function buildRemoveChannelSelect(userId) {
 
 module.exports = {
     buildPanel,
-    buildWelcomeContainer,
+    buildEntryContainer,
     buildRemoveChannelSelect,
     formatInterval,
     botAvatar,

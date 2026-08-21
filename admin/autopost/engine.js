@@ -11,6 +11,55 @@ const logStore = require("./logStore");
 
 const activePosters = {}; // userId -> { channelId: Promise }
 
+// ─── Notifikasi error ke user via DM ────────────────────────────────────────
+// client di-set dari index.js setelah login (setClient). Cooldown supaya user
+// tidak di-spam DM setiap interval kalau errornya berulang.
+
+let discordClient = null;
+const lastErrorNotify = {}; // userId -> timestamp ms
+const NOTIFY_COOLDOWN_MS = 5 * 60 * 1000;
+
+/** Simpan referensi discord client untuk kirim DM notifikasi error. */
+function setClient(client) {
+    discordClient = client;
+}
+
+async function notifyUser(userId, text) {
+    if (!discordClient) return;
+    try {
+        await discordClient.users.send(userId, text);
+    } catch (err) {
+        log("warn", `Tidak bisa kirim DM error ke ${userId} (DM tertutup?): ${err.message}`);
+    }
+}
+
+const STATUS_HINTS = {
+    403: "Token tidak punya izin kirim ke channel tersebut.",
+    404: "Channel tidak ditemukan (mungkin sudah dihapus).",
+    429: "Rate limit Discord — tunggu, pesan akan dikirim lagi sesuai interval."
+};
+
+/** DM error sekali per cooldown (5 menit) per user. status 0 = network error. */
+async function notifyError(userId, channelId, status) {
+    const now = Date.now();
+    if (lastErrorNotify[userId] && now - lastErrorNotify[userId] < NOTIFY_COOLDOWN_MS) return;
+    lastErrorNotify[userId] = now;
+    const hint =
+        status === 0
+            ? "Gagal koneksi ke Discord (network error / timeout)."
+            : STATUS_HINTS[status] || `Respons HTTP ${status} dari Discord.`;
+    const headline =
+        status === 0
+            ? "Gagal mengirim pesan ke channel <#" + channelId + "> — **network error**."
+            : "Gagal mengirim pesan ke channel <#" + channelId + "> — **HTTP " + status + "**.";
+    await notifyUser(userId, [
+        "⚠️ **AutoPost Error**",
+        headline,
+        `> ${hint}`,
+        "AutoPost masih berjalan. Perbarui konfigurasi lewat panel jika error terus berlanjut."
+    ].join("\n"));
+}
+
 /** Kirim pesan ke channel via REST Discord memakai token USER. */
 async function sendViaUserToken(token, channelId, message) {
     const res = await fetch(
@@ -55,9 +104,25 @@ function startAutoPost(userId) {
                     const status = await sendViaUserToken(config.token, ch.id, ch.message);
                     if (status !== 200 && status !== 204) {
                         log("error", `Gagal post ke ${ch.id}: HTTP ${status}`);
+
+                        // 401 = token tidak valid → tidak ada gunanya lanjut.
+                        // Hentikan semua loop dan langsung kabari user via DM.
+                        if (status === 401) {
+                            stopAutoPost(userId);
+                            await notifyUser(userId, [
+                                "🚫 **AutoPost Dihentikan — Token Tidak Valid (401)**",
+                                "Token Discord kamu ditolak saat mengirim pesan ke <#" + ch.id + ">.",
+                                "Semua posting untuk akunmu sudah dihentikan otomatis.",
+                                "Perbarui token lewat panel AutoPost lalu tekan Start lagi."
+                            ].join("\n"));
+                            return;
+                        }
+
+                        await notifyError(userId, ch.id, status);
                     }
                 } catch (err) {
                     log("error", `Error posting ke ${ch.id}: ${err.message}`);
+                    await notifyError(userId, ch.id, 0);
                 }
                 if (!activePosters[userId]) break;
                 await new Promise((resolve) => setTimeout(resolve, ch.interval * 1000));
@@ -76,6 +141,7 @@ function startAutoPost(userId) {
 function stopAutoPost(userId) {
     if (!activePosters[userId]) return false;
     delete activePosters[userId];
+    delete lastErrorNotify[userId]; // reset cooldown supaya error berikutnya langsung di-DM lagi
     const config = store.peekUserConfig(userId);
     const label = (config && config.username) || userId;
     log("info", `⏹️ AutoPost STOP untuk user ${label}`);
@@ -108,5 +174,6 @@ module.exports = {
     startAutoPost,
     stopAutoPost,
     isAutoPostActive,
-    getStatuses
+    getStatuses,
+    setClient
 };

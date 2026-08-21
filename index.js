@@ -108,6 +108,8 @@ if (!process.env.TOKEN) {
 client.login(process.env.TOKEN)
     .then(() => {
         console.log("🔑 Bot berhasil login.");
+        // Berikan client ke engine AutoPost untuk DM notifikasi error posting.
+        require("./admin/autopost/engine").setClient(client);
         startAdminServer(client);
     })
     .catch(err => console.error("❌ Gagal login bot:", err));

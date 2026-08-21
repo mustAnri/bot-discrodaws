@@ -427,6 +427,30 @@ app.get("/api/autopost/users/:id", requireAuth, (req, res) => {
     });
 });
 
+// Hapus user sepenuhnya: stop jika running, hapus config + legacy room (termasuk channel Discord-nya)
+app.delete("/api/autopost/users/:id", requireAuth, async (req, res) => {
+    const userId = req.params.id;
+    if (!autopostStore.peekUserConfig(userId)) {
+        return res.status(404).json({ success: false, error: "User config tidak ditemukan." });
+    }
+    // Stop worker yang masih jalan sebelum menghapus data.
+    if (autopostEngine.isAutoPostActive(userId)) {
+        autopostEngine.stopAutoPost(userId);
+    }
+    // Legacy room: hapus juga channel Discord-nya jika masih ada.
+    const room = autopostStore.getUserRoom(userId);
+    if (room && discordClient) {
+        try {
+            const channel = await discordClient.channels.fetch(room.channelId).catch(() => null);
+            if (channel) await channel.delete("Dihapus via web admin panel").catch(() => {});
+        } catch (err) {
+            console.error("[AUTOPOST] delete user room channel error:", err.message);
+        }
+    }
+    autopostStore.deleteUser(userId);
+    res.json({ success: true, data: { userId } });
+});
+
 // Simpan / update token user
 app.put("/api/autopost/users/:id/token", requireAuth, (req, res) => {
     const userId = req.params.id;
