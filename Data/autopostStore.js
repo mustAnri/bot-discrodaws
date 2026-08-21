@@ -26,9 +26,29 @@
 const fs = require("fs");
 const path = require("path");
 
-const STORE_PATH = path.join(__dirname, "autopost-store.json");
+// Sama seperti handlerData/config: di Railway set DATA_DIR=/data agar
+// file JSON disimpan di volume permanen. Lokal: file di folder Data/.
+const DATA_FILE_NAME = "autopost-store.json";
+const dataDir = process.env.DATA_DIR && process.env.DATA_DIR.trim() !== ""
+    ? process.env.DATA_DIR
+    : __dirname;
+const STORE_PATH = path.join(dataDir, DATA_FILE_NAME);
+const seedPath = path.join(__dirname, DATA_FILE_NAME);
 const DEFAULT_USER = { username: "", token: "", channels: [] };
 const DEFAULT_SETTINGS = { bannerUrl: "", whitelistRoleId: "", setupRoleId: "" };
+
+// Salin data bawaan ke volume saat pertama kali deploy (jika ada & volume kosong)
+function seedInitialData() {
+    try {
+        if (!fs.existsSync(STORE_PATH) && fs.existsSync(seedPath)) {
+            fs.copyFileSync(seedPath, STORE_PATH);
+            console.log(`📦 Data awal disalin ke volume: ${STORE_PATH}`);
+        }
+    } catch (err) {
+        console.error("SEED DATA ERROR:", err);
+    }
+}
+seedInitialData();
 
 let cache = loadStore();
 
